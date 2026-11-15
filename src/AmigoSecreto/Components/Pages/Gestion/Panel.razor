@@ -1,0 +1,202 @@
+@page "/gestion"
+@attribute [Authorize(Policy = Politicas.Organizador)]
+@inject IntercambioService Servicio
+@inject NavigationManager Navegacion
+
+<PageTitle>Gestión · Amigo Secreto</PageTitle>
+
+<section class="tarjeta">
+    <div class="titulo-con-accion">
+        <h1>Panel del organizador</h1>
+        <button type="submit" form="frm-acciones" name="Accion" value="salir" class="btn btn-enlace">Cerrar sesión</button>
+    </div>
+
+    @if (MensajeRedireccion is not null)
+    {
+        <div class="aviso aviso-exito" role="status">@MensajeRedireccion</div>
+    }
+    @if (exito is not null)
+    {
+        <div class="aviso aviso-exito" role="status">@exito</div>
+    }
+    @if (error is not null)
+    {
+        <div class="aviso aviso-error" role="alert">@error</div>
+    }
+    @if (codigoRecuperado is not null)
+    {
+        <div class="aviso aviso-advertencia" role="alert">
+            <p>Código de <strong>@codigoRecuperado.Value.Nombre</strong>:</p>
+            <p class="codigo-valor codigo-valor-chico">@codigoRecuperado.Value.Codigo</p>
+            <p>⚠️ Este código permite ver su inscripción <strong>y su asignación del sorteo</strong>. Compártelo solo con esa persona y no lo uses tú.</p>
+        </div>
+    }
+
+    @if (resumen is not null)
+    {
+        <div class="estadisticas">
+            <div class="estadistica"><span class="numero">@resumen.Participantes.Count</span><span>Inscritos</span></div>
+            <div class="estadistica"><span class="numero">@resumen.Asistentes</span><span>Asistirán</span></div>
+            <div class="estadistica"><span class="numero">@resumen.NoAsistentes</span><span>No asistirán</span></div>
+        </div>
+
+        <div class="estado-sorteo @(resumen.Estado.Realizado ? "realizado" : "")">
+            @if (resumen.Estado.Realizado)
+            {
+                <p>✅ <strong>Sorteo realizado</strong> el @HoraGuatemala.Formatear(resumen.Estado.FechaSorteoUtc!.Value) con @resumen.TotalAsignaciones participantes. Las inscripciones están cerradas.</p>
+            }
+            else
+            {
+                <p>📝 <strong>Inscripciones abiertas.</strong> El sorteo incluirá solo a quienes asistirán (mínimo @IntercambioService.MinimoParticipantes).</p>
+            }
+        </div>
+
+        <div class="acciones">
+            @if (!resumen.Estado.Realizado)
+            {
+                <button type="submit" form="frm-acciones" name="Accion" value="sortear" class="btn btn-primario btn-grande"
+                        data-confirm="¿Realizar el sorteo con las @resumen.Asistentes personas que asistirán? Se cerrarán las inscripciones.">
+                    🎲 Realizar sorteo
+                </button>
+            }
+            else
+            {
+                <button type="submit" form="frm-acciones" name="Accion" value="rehacer" class="btn btn-secundario"
+                        data-confirm="¿Rehacer el sorteo? Se generará una asignación nueva y la anterior se perderá. Quienes ya vieron a su amigo secreto verán uno distinto.">
+                    🔁 Rehacer sorteo
+                </button>
+                <button type="submit" form="frm-acciones" name="Accion" value="reiniciar" class="btn btn-peligro"
+                        data-confirm="¿Reiniciar el sorteo? Se borrarán todas las asignaciones y se volverán a abrir las inscripciones.">
+                    ↩️ Reiniciar sorteo
+                </button>
+            }
+        </div>
+    }
+</section>
+
+@if (resumen is not null)
+{
+    <section class="tarjeta">
+        <h2>Participantes</h2>
+        @if (resumen.Participantes.Count == 0)
+        {
+            <p class="ayuda">Todavía no hay inscripciones.</p>
+        }
+        else
+        {
+            <ul class="lista-participantes">
+                @foreach (var p in resumen.Participantes)
+                {
+                    <li>
+                        <div class="participante-info">
+                            <strong>@p.NombreCompleto</strong>
+                            <span class="etiqueta @(p.Asistira ? "etiqueta-si" : "etiqueta-no")">@(p.Asistira ? "Asistirá" : "No asistirá")</span>
+                            <small>Inscrito el @HoraGuatemala.Formatear(p.FechaInscripcionUtc)</small>
+                        </div>
+                        <div class="participante-acciones">
+                            <button type="submit" form="frm-participante" name="Recuperar" value="@p.Id" class="btn btn-chico btn-secundario"
+                                    data-confirm="¿Mostrar el código de @p.NombreCompleto? Con ese código se puede ver su asignación del sorteo.">
+                                🔑 Código
+                            </button>
+                            @if (!resumen.Estado.Realizado)
+                            {
+                                <button type="submit" form="frm-participante" name="Eliminar" value="@p.Id" class="btn btn-chico btn-peligro"
+                                        data-confirm="¿Eliminar la inscripción de @p.NombreCompleto? Esta acción no se puede deshacer.">
+                                    🗑️ Eliminar
+                                </button>
+                            }
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@* Formularios únicos; los botones de arriba los envían con el atributo form="...". *@
+<form id="frm-acciones" method="post" @formname="acciones" @onsubmit="AccionAsync"><AntiforgeryToken /></form>
+<form id="frm-participante" method="post" @formname="participante" @onsubmit="ParticipanteAsync"><AntiforgeryToken /></form>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromQuery(Name = "m")]
+    private string? Mensaje { get; set; }
+
+    [SupplyParameterFromForm(FormName = "acciones")]
+    private string? Accion { get; set; }
+
+    [SupplyParameterFromForm(FormName = "participante")]
+    private int? Eliminar { get; set; }
+
+    [SupplyParameterFromForm(FormName = "participante")]
+    private int? Recuperar { get; set; }
+
+    private ResumenGestion? resumen;
+    private string? exito;
+    private string? error;
+    private (string Nombre, string Codigo)? codigoRecuperado;
+
+    private string? MensajeRedireccion => HttpMethods.IsGet(HttpContext.Request.Method)
+        ? Mensaje switch
+        {
+            "sorteado" => "🎉 ¡Sorteo realizado! Las inscripciones quedaron cerradas.",
+            "rehecho" => "🔁 Se generó una nueva asignación.",
+            "reiniciado" => "↩️ Sorteo reiniciado: se borraron las asignaciones y las inscripciones están abiertas.",
+            _ => null,
+        }
+        : null;
+
+    protected override async Task OnInitializedAsync() => resumen = await Servicio.ResumenAsync();
+
+    private async Task AccionAsync()
+    {
+        // Las acciones que cambian el sorteo redirigen (PRG) para que recargar la página no las repita.
+        switch (Accion)
+        {
+            case "salir":
+                await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                Navegacion.NavigateTo("gestion/acceso");
+                return;
+            case "sortear":
+                await AplicarAsync(Servicio.SortearAsync(rehacer: false), "sorteado");
+                return;
+            case "rehacer":
+                await AplicarAsync(Servicio.SortearAsync(rehacer: true), "rehecho");
+                return;
+            case "reiniciar":
+                await AplicarAsync(Servicio.ReiniciarAsync(), "reiniciado");
+                return;
+            default:
+                error = "Acción no reconocida.";
+                return;
+        }
+    }
+
+    private async Task AplicarAsync(Task<Resultado> operacion, string mensaje)
+    {
+        var resultado = await operacion;
+        if (resultado.Ok)
+            Navegacion.NavigateTo($"gestion?m={mensaje}");
+        else
+            error = resultado.Error;
+    }
+
+    private async Task ParticipanteAsync()
+    {
+        if (Eliminar is int idEliminar)
+        {
+            var resultado = await Servicio.EliminarAsync(idEliminar);
+            if (resultado.Ok) exito = "Inscripción eliminada.";
+            else error = resultado.Error;
+            resumen = await Servicio.ResumenAsync();
+        }
+        else if (Recuperar is int idRecuperar)
+        {
+            var p = await Servicio.ObtenerParticipanteAsync(idRecuperar);
+            if (p is null) error = "La inscripción ya no existe.";
+            else codigoRecuperado = (p.NombreCompleto, p.Codigo);
+        }
+    }
+}

@@ -1,0 +1,46 @@
+@* El parámetro se llama "Form" a propósito: los nombres de los campos HTML salen de la expresión
+   (Form.NombreCompleto, ...) y deben coincidir con la propiedad [SupplyParameterFromForm] "Form" de la página. *@
+
+<div class="campo">
+    <label for="nombre">Nombre completo</label>
+    <InputText id="nombre" @bind-Value="Form.NombreCompleto" autocomplete="name"
+               required minlength="3" maxlength="100" placeholder="Ej.: María José López" />
+    <ValidationMessage For="() => Form.NombreCompleto" class="error-campo" />
+</div>
+
+<div class="campo">
+    <label for="postre">¿Qué postre te gustaría recibir?</label>
+    <InputText id="postre" @bind-Value="Form.Postre" autocomplete="off"
+               required minlength="2" maxlength="150" placeholder="Ej.: Pie de limón" />
+    <ValidationMessage For="() => Form.Postre" class="error-campo" />
+</div>
+
+<div class="campo">
+    <label for="lugar">¿Dónde se puede comprar?</label>
+    <InputText id="lugar" @bind-Value="Form.LugarCompra" autocomplete="off"
+               required minlength="2" maxlength="150" placeholder="Ej.: Pastelería La Esperanza, zona 10" />
+    <ValidationMessage For="() => Form.LugarCompra" class="error-campo" />
+</div>
+
+<fieldset class="campo">
+    <legend>¿Asistirás al convivio?</legend>
+    <InputRadioGroup @bind-Value="Form.Asistira">
+        <div class="opciones">
+            <label class="opcion">
+                <InputRadio TValue="bool?" Value="true" required />
+                <span>Sí, ahí estaré 🎉</span>
+            </label>
+            <label class="opcion">
+                <InputRadio TValue="bool?" Value="false" />
+                <span>No podré ir</span>
+            </label>
+        </div>
+    </InputRadioGroup>
+    <p class="ayuda">Solo quienes asistan participan en el sorteo.</p>
+    <ValidationMessage For="() => Form.Asistira" class="error-campo" />
+</fieldset>
+
+@code {
+    [Parameter, EditorRequired]
+    public ParticipanteForm Form { get; set; } = default!;
+}

@@ -1,0 +1,12 @@
+<div class="codigo-tarjeta" data-save-code="@Codigo">
+    <span class="codigo-etiqueta">Tu código personal</span>
+    <output class="codigo-valor" id="codigo-personal" aria-live="polite">@Codigo</output>
+    <button type="button" class="btn btn-dorado" data-copy="#codigo-personal">
+        <span data-copy-label>📋 Copiar código</span>
+    </button>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Codigo { get; set; } = default!;
+}

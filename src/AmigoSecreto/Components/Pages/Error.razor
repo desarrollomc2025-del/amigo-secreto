@@ -1,0 +1,30 @@
+﻿@page "/Error"
+@using System.Diagnostics
+
+<PageTitle>Algo salió mal · Amigo Secreto</PageTitle>
+
+<section class="tarjeta tarjeta-angosta centrado">
+    <div class="portada-adorno" aria-hidden="true">☃️</div>
+    <h1>¡Ups! Algo salió mal</h1>
+    <p class="lead">
+        No pudimos completar tu solicitud. Puede que el servidor se esté despertando:
+        espera unos segundos e inténtalo de nuevo.
+    </p>
+    <div class="acciones acciones-centro">
+        <a class="btn btn-primario" href="">Volver al inicio</a>
+    </div>
+    @if (!string.IsNullOrEmpty(RequestId))
+    {
+        <p class="ayuda">Referencia: <code>@RequestId</code></p>
+    }
+</section>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

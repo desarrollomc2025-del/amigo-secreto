@@ -1,0 +1,192 @@
+@page "/consulta"
+@inject IntercambioService Servicio
+
+<PageTitle>Mi inscripción · Amigo Secreto</PageTitle>
+
+@if (vista is null)
+{
+    <section class="tarjeta">
+        <h1>Ingresa tu código</h1>
+        <p class="lead">Con tu código personal puedes ver o editar tu inscripción y, después del sorteo, descubrir a tu amigo secreto.</p>
+
+        @if (error is not null)
+        {
+            <div class="aviso aviso-error" role="alert">@error</div>
+        }
+
+        <EditForm Model="Busqueda" FormName="buscar" OnValidSubmit="BuscarAsync" class="formulario">
+            <DataAnnotationsValidator />
+            <div class="campo">
+                <label for="codigo">Código personal</label>
+                <InputText id="codigo" @bind-Value="Busqueda.Codigo" class="entrada-codigo"
+                           required minlength="6" maxlength="7" autocomplete="off" autocapitalize="characters"
+                           spellcheck="false" placeholder="ABC234" data-autofill-code
+                           pattern="\s*[A-Za-z0-9]{3}-?[A-Za-z0-9]{3}\s*" title="Tu código tiene 6 letras y números." />
+                <ValidationMessage For="() => Busqueda.Codigo" class="error-campo" />
+            </div>
+            <button type="submit" class="btn btn-primario btn-grande btn-bloque">Continuar</button>
+        </EditForm>
+
+        <p class="ayuda">¿Perdiste tu código? Pídeselo al organizador del intercambio.</p>
+    </section>
+}
+else
+{
+    var p = vista.Participante;
+    <div data-save-code="@p.Codigo" hidden></div>
+
+    @if (!vista.SorteoRealizado)
+    {
+        <section class="tarjeta">
+            <h1>Hola, @p.NombreCompleto 👋</h1>
+            <p class="lead">El sorteo aún no se realiza. Mientras tanto, puedes modificar tu inscripción.</p>
+
+            @if (error is not null)
+            {
+                <div class="aviso aviso-error" role="alert">@error</div>
+            }
+            @if (exito is not null)
+            {
+                <div class="aviso aviso-exito" role="status">@exito</div>
+            }
+
+            <EditForm Model="Form" FormName="editar" OnValidSubmit="GuardarAsync" class="formulario">
+                <DataAnnotationsValidator />
+                <input type="hidden" name="Form.Codigo" value="@p.Codigo" />
+                <CamposParticipante Form="Form!" />
+                <button type="submit" class="btn btn-primario btn-grande btn-bloque">💾 Guardar cambios</button>
+            </EditForm>
+
+            <p class="ayuda">Inscrito el @HoraGuatemala.Formatear(p.FechaInscripcionUtc) (hora de Guatemala).</p>
+        </section>
+    }
+    else if (!p.Asistira)
+    {
+        <section class="tarjeta">
+            <div class="portada-adorno" aria-hidden="true">💌</div>
+            <h1>Hola, @p.NombreCompleto</h1>
+            <p class="lead">
+                Como indicaste que no asistirías al convivio, no participaste en el sorteo.
+                ¡Te extrañaremos! Esperamos verte en la próxima.
+            </p>
+            @if (error is not null)
+            {
+                <div class="aviso aviso-error" role="alert">@error</div>
+            }
+        </section>
+    }
+    else if (vista.Amigo is null)
+    {
+        <section class="tarjeta">
+            <h1>Hola, @p.NombreCompleto</h1>
+            <div class="aviso aviso-error" role="alert">
+                No encontramos tu asignación. Por favor, avísale al organizador del intercambio.
+            </div>
+        </section>
+    }
+    else
+    {
+        <section class="tarjeta tarjeta-regalo">
+            <h1>Hola, @p.NombreCompleto 🎄</h1>
+            @if (error is not null)
+            {
+                <div class="aviso aviso-error" role="alert">@error</div>
+            }
+            <div class="regalo-escena" data-gift-scene>
+                <button type="button" class="regalo" data-gift aria-controls="revelacion" aria-label="Abrir mi regalo">
+                    <span class="regalo-tapa" aria-hidden="true"></span>
+                    <span class="regalo-caja" aria-hidden="true"></span>
+                </button>
+                <p class="regalo-indicacion">Toca el regalo para descubrir a tu amigo secreto</p>
+            </div>
+
+            <div id="revelacion" class="revelacion" tabindex="-1" hidden>
+                <p class="revelacion-titulo">Tu amigo secreto es…</p>
+                <p class="revelacion-nombre">@vista.Amigo.NombreCompleto</p>
+                <dl class="revelacion-datos">
+                    <div>
+                        <dt>🍰 Postre que le gustaría</dt>
+                        <dd>@vista.Amigo.Postre</dd>
+                    </div>
+                    <div>
+                        <dt>📍 Dónde comprarlo</dt>
+                        <dd>@vista.Amigo.LugarCompra</dd>
+                    </div>
+                </dl>
+                <p class="ayuda">🤫 ¡Shhh! Que sea secreto hasta el convivio.</p>
+            </div>
+            <noscript><style>.revelacion[hidden]{display:block!important}.regalo-escena{display:none}</style></noscript>
+        </section>
+    }
+
+    <div class="acciones acciones-centro">
+        <a class="btn btn-enlace" href="consulta" data-forget-code>Usar otro código</a>
+    </div>
+}
+
+@* En SSR el formulario enviado debe existir en la página para que se ejecute su manejador.
+   Si ya no se muestra la edición (p. ej. el sorteo se hizo mientras editaba), se deja vacío y oculto. *@
+@if (Form is not null && !MostrarEdicion)
+{
+    <EditForm Model="Form" FormName="editar" OnValidSubmit="GuardarAsync" hidden />
+}
+
+@code {
+    [SupplyParameterFromForm(FormName = "buscar")]
+    private BusquedaForm Busqueda { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "editar")]
+    private ParticipanteForm? Form { get; set; }
+
+    private VistaParticipante? vista;
+    private string? error;
+    private string? exito;
+
+    private bool MostrarEdicion => vista is { SorteoRealizado: false };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Busqueda ??= new BusquedaForm();
+
+        // Envío del formulario de edición: hay que cargar la inscripción antes del manejador.
+        if (Form is not null)
+        {
+            var codigo = CodigoPersonal.Normalizar(Form.Codigo);
+            vista = codigo is null ? null : await Servicio.ConsultarAsync(codigo);
+            if (vista is null) error = "Tu sesión no es válida. Vuelve a ingresar tu código.";
+        }
+    }
+
+    private async Task BuscarAsync()
+    {
+        var codigo = CodigoPersonal.Normalizar(Busqueda.Codigo);
+        if (codigo is null)
+        {
+            error = "El código debe tener 6 caracteres (letras y números, sin 0, O, 1 ni I).";
+            return;
+        }
+
+        vista = await Servicio.ConsultarAsync(codigo);
+        if (vista is null)
+            error = "No encontramos una inscripción con ese código. Revisa que esté bien escrito.";
+        else
+            Form = ParticipanteForm.Desde(vista.Participante);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (vista is null) return; // el código no era válido; ya se mostró el error
+
+        var codigo = vista.Participante.Codigo;
+        var resultado = await Servicio.ActualizarAsync(codigo, Form!);
+        vista = await Servicio.ConsultarAsync(codigo);
+
+        if (!resultado.Ok)
+            error = resultado.Error;
+        else if (vista is not null)
+        {
+            exito = "¡Listo! Guardamos tus cambios.";
+            Form = ParticipanteForm.Desde(vista.Participante);
+        }
+    }
+}

@@ -1,0 +1,45 @@
+﻿@page "/"
+@inject IntercambioService Servicio
+
+<PageTitle>Amigo Secreto · Intercambio de postres</PageTitle>
+
+<section class="tarjeta portada">
+    <div class="portada-adorno" aria-hidden="true">🎄🍰🎁</div>
+    <h1>¡Intercambio de postres!</h1>
+    <p class="lead">
+        Inscríbete, elige el postre que te gustaría recibir y, cuando se haga el sorteo,
+        descubre a quién le darás tu postre.
+    </p>
+
+    @if (sorteoRealizado)
+    {
+        <div class="aviso aviso-exito">✨ ¡El sorteo ya se realizó! Ingresa tu código para descubrir a tu amigo secreto.</div>
+        <div class="acciones">
+            <a class="btn btn-primario btn-grande" href="consulta">🎁 Ver mi amigo secreto</a>
+        </div>
+    }
+    else
+    {
+        <div class="acciones">
+            <a class="btn btn-primario btn-grande" href="inscripcion">✍️ Inscribirme</a>
+            <a class="btn btn-secundario btn-grande" href="consulta">🔑 Ya tengo mi código</a>
+        </div>
+    }
+</section>
+
+<section class="tarjeta pasos">
+    <h2>¿Cómo funciona?</h2>
+    <ol>
+        <li><strong>Inscríbete</strong> con tu nombre, el postre que quieres y dónde se compra.</li>
+        <li><strong>Guarda tu código</strong> de 6 caracteres. Con él puedes editar tu inscripción.</li>
+        <li><strong>Espera el sorteo.</strong> Al cerrarse las inscripciones, el organizador lo realiza.</li>
+        <li><strong>Abre tu regalo</strong> con tu código y descubre a quién le regalarás. 🤫</li>
+    </ol>
+</section>
+
+@code {
+    private bool sorteoRealizado;
+
+    protected override async Task OnInitializedAsync() =>
+        sorteoRealizado = await Servicio.SorteoRealizadoAsync();
+}

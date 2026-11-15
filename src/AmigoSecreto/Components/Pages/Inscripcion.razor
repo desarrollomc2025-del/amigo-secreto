@@ -1,0 +1,71 @@
+@page "/inscripcion"
+@inject IntercambioService Servicio
+
+<PageTitle>Inscripción · Amigo Secreto</PageTitle>
+
+@if (codigoGenerado is not null)
+{
+    <section class="tarjeta tarjeta-exito">
+        <div class="portada-adorno" aria-hidden="true">🎉</div>
+        <h1>¡Ya estás inscrito!</h1>
+        <p>Guarda bien este código: lo necesitarás para editar tu inscripción y para descubrir a tu amigo secreto.</p>
+        <TarjetaCodigo Codigo="@codigoGenerado" />
+        <p class="ayuda">Lo guardamos también en este navegador para rellenarlo automáticamente.</p>
+        <div class="acciones">
+            <a class="btn btn-secundario" href="consulta">Ver o editar mi inscripción</a>
+            <a class="btn btn-enlace" href="">Volver al inicio</a>
+        </div>
+    </section>
+}
+else if (sorteoRealizado)
+{
+    <section class="tarjeta">
+        <h1>Inscripciones cerradas</h1>
+        <p>El sorteo ya se realizó, así que no se aceptan nuevas inscripciones.</p>
+        <div class="acciones">
+            <a class="btn btn-primario" href="consulta">🎁 Ver mi amigo secreto</a>
+        </div>
+    </section>
+}
+else
+{
+    <section class="tarjeta">
+        <h1>Inscríbete al intercambio</h1>
+        <p class="lead">No necesitas cuenta: al terminar recibirás un código personal.</p>
+
+        @if (error is not null)
+        {
+            <div class="aviso aviso-error" role="alert">@error</div>
+        }
+
+        <EditForm Model="Form" FormName="inscripcion" OnValidSubmit="InscribirAsync" class="formulario">
+            <DataAnnotationsValidator />
+            <CamposParticipante Form="Form" />
+            <button type="submit" class="btn btn-primario btn-grande btn-bloque">🎁 Inscribirme</button>
+        </EditForm>
+    </section>
+}
+
+@code {
+    [SupplyParameterFromForm(FormName = "inscripcion")]
+    private ParticipanteForm? Form { get; set; }
+
+    private bool sorteoRealizado;
+    private string? codigoGenerado;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Form ??= new ParticipanteForm();
+        sorteoRealizado = await Servicio.SorteoRealizadoAsync();
+    }
+
+    private async Task InscribirAsync()
+    {
+        var resultado = await Servicio.InscribirAsync(Form!);
+        if (resultado.Ok)
+            codigoGenerado = resultado.Codigo;
+        else
+            error = resultado.Error;
+    }
+}

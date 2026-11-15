@@ -1,0 +1,37 @@
+@page "/estado/{Codigo:int}"
+@page "/not-found"
+
+<PageTitle>@titulo · Amigo Secreto</PageTitle>
+
+<section class="tarjeta tarjeta-angosta centrado">
+    <div class="portada-adorno" aria-hidden="true">@icono</div>
+    <h1>@titulo</h1>
+    <p class="lead">@mensaje</p>
+    <div class="acciones acciones-centro">
+        <a class="btn btn-primario" href="">Volver al inicio</a>
+    </div>
+</section>
+
+@code {
+    [Parameter]
+    public int? Codigo { get; set; }
+
+    private string titulo = "";
+    private string mensaje = "";
+    private string icono = "";
+
+    protected override void OnParametersSet()
+    {
+        (icono, titulo, mensaje) = Codigo switch
+        {
+            400 => ("⏳", "El formulario expiró",
+                "Por seguridad, el formulario dejó de ser válido. Recarga la página e inténtalo de nuevo."),
+            429 => ("🐢", "Demasiados intentos",
+                "Hiciste muchas solicitudes seguidas. Espera un par de minutos e inténtalo de nuevo."),
+            null or 404 => ("🧭", "Página no encontrada",
+                "La página que buscas no existe. Quizá el enlace está mal escrito."),
+            _ => ("☃️", "Algo salió mal",
+                "No pudimos completar tu solicitud. Inténtalo de nuevo en unos segundos."),
+        };
+    }
+}
