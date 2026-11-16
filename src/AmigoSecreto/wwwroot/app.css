@@ -346,6 +346,18 @@ input.valid.modified { border-color: #7fb594; }
 .etiqueta-si { background: var(--verde-claro); color: var(--verde); }
 .etiqueta-no { background: #f1ece8; color: var(--texto-suave); }
 
+.parejas-revelar > summary { list-style: none; cursor: pointer; margin-top: .5rem; }
+.parejas-revelar > summary::-webkit-details-marker { display: none; }
+.parejas-revelar[open] > summary { display: none; }
+.lista-parejas { margin: 0; padding-left: 1.6rem; }
+.lista-parejas li { padding: .75rem 0; border-bottom: 1px solid var(--borde); }
+.lista-parejas li:last-child { border-bottom: 0; }
+.lista-parejas li > span { display: inline-block; vertical-align: top; }
+.pareja-da { font-weight: 600; overflow-wrap: anywhere; }
+.pareja-flecha { margin: 0 .4rem; white-space: nowrap; }
+.pareja-recibe strong { overflow-wrap: anywhere; }
+.pareja-recibe small { display: block; color: var(--texto-suave); }
+
 code { background: #f6efe6; padding: .1rem .35rem; border-radius: 6px; }
 
 /* ----- Pantallas más grandes ----- */

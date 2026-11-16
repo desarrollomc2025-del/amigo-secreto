@@ -1,0 +1,54 @@
+@page "/gestion/parejas"
+@attribute [Authorize(Policy = Politicas.Organizador)]
+@inject IntercambioService Servicio
+
+<PageTitle>Parejas del sorteo · Red Cetino-Monteagudo-Rivera</PageTitle>
+
+<section class="tarjeta">
+    <div class="titulo-con-accion">
+        <h1>🔒 Parejas del sorteo</h1>
+        <a href="gestion" class="btn btn-enlace">← Volver al panel</a>
+    </div>
+
+    @if (parejas is null)
+    {
+        <p class="ayuda">Cargando…</p>
+    }
+    else if (parejas.Count == 0)
+    {
+        <div class="aviso aviso-advertencia" role="status">
+            Todavía no se ha realizado el sorteo, así que no hay parejas que mostrar.
+        </div>
+    }
+    else
+    {
+        <div class="aviso aviso-advertencia" role="alert">
+            ⚠️ Esta página revela <strong>todo</strong> el sorteo. Si tú también participas, al abrirla sabrás quién te regala a ti.
+        </div>
+
+        <details class="parejas-revelar">
+            <summary class="btn btn-primario">👀 Mostrar las @parejas.Count parejas</summary>
+
+            <ol class="lista-parejas">
+                @foreach (var p in parejas)
+                {
+                    <li>
+                        <span class="pareja-da">@p.Da.NombreCompleto</span>
+                        <span class="pareja-flecha" aria-label="le regala a">🎁 →</span>
+                        <span class="pareja-recibe">
+                            <strong>@p.Recibe.NombreCompleto</strong>
+                            <small>Postre: @p.Recibe.Postre · @p.Recibe.LugarCompra</small>
+                        </span>
+                    </li>
+                }
+            </ol>
+            <p class="ayuda">Se lee «quien da 🎁 → quien recibe», siguiendo la cadena del sorteo.</p>
+        </details>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<Pareja>? parejas;
+
+    protected override async Task OnInitializedAsync() => parejas = await Servicio.ParejasAsync();
+}

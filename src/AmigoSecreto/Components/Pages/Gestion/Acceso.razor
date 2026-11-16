@@ -41,13 +41,23 @@
     [SupplyParameterFromForm(FormName = "acceso")]
     private AccesoForm Form { get; set; } = default!;
 
+    [SupplyParameterFromQuery(Name = "volver")]
+    private string? Volver { get; set; }
+
     private string? error;
+
+    // Solo se vuelve a páginas de gestión conocidas (evita redirecciones abiertas).
+    private string Destino => Volver?.TrimEnd('/').ToLowerInvariant() switch
+    {
+        "/gestion/parejas" => "gestion/parejas",
+        _ => "gestion",
+    };
 
     protected override void OnInitialized()
     {
         Form ??= new AccesoForm();
         if (HttpMethods.IsGet(HttpContext.Request.Method) && HttpContext.User.IsInRole(Politicas.Organizador))
-            Navegacion.NavigateTo("gestion");
+            Navegacion.NavigateTo(Destino);
     }
 
     private async Task EntrarAsync()
@@ -62,6 +72,6 @@
             [new Claim(ClaimTypes.Name, "Organizador"), new Claim(ClaimTypes.Role, Politicas.Organizador)],
             CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identidad));
-        Navegacion.NavigateTo("gestion");
+        Navegacion.NavigateTo(Destino);
     }
 }

@@ -13,6 +13,8 @@ public sealed record Resultado(bool Ok, string? Error = null, string? Codigo = n
 
 public sealed record VistaParticipante(Participante Participante, bool SorteoRealizado, Participante? Amigo);
 
+public sealed record Pareja(Participante Da, Participante Recibe);
+
 public sealed record ResumenGestion(
     EstadoSorteo Estado,
     IReadOnlyList<Participante> Participantes,
@@ -147,7 +149,7 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
         var participantes = await db.Participantes.AsNoTracking()
             .OrderBy(p => p.FechaInscripcionUtc)
             .ToListAsync();
-        // Solo se cuenta: las asignaciones nunca se envían a la vista de gestión.
+        // Solo se cuenta: las parejas se ven aparte, en /gestion/parejas, para no revelarlas por accidente.
         var asignaciones = await db.Asignaciones.CountAsync();
         return new ResumenGestion(estado, participantes, asignaciones);
     }
@@ -223,6 +225,34 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
             var borrados = await db.Participantes.Where(p => p.Id == id).ExecuteDeleteAsync();
             return borrados > 0 ? Resultado.Exito() : Resultado.Falla("La inscripción ya no existe.");
         });
+    }
+
+    /// <summary>
+    /// Parejas del sorteo (quién le regala a quién), ordenadas siguiendo la cadena para que se lean
+    /// como A → B → C → … Solo para la página protegida /gestion/parejas.
+    /// </summary>
+    public async Task<IReadOnlyList<Pareja>> ParejasAsync()
+    {
+        await inicializador.EsperarAsync();
+        var asignaciones = await db.Asignaciones.AsNoTracking()
+            .Select(a => new Pareja(a.Da!, a.Recibe!))
+            .ToListAsync();
+        if (asignaciones.Count == 0) return [];
+
+        var porDa = asignaciones.ToDictionary(p => p.Da.Id);
+        var ordenadas = new List<Pareja>(asignaciones.Count);
+        var visitados = new HashSet<int>();
+        // Recorre cada ciclo empezando por el primero en inscribirse (normalmente hay uno solo).
+        foreach (var inicio in asignaciones.OrderBy(p => p.Da.FechaInscripcionUtc))
+        {
+            Pareja? actual = inicio;
+            while (actual is not null && visitados.Add(actual.Da.Id))
+            {
+                ordenadas.Add(actual);
+                actual = porDa.GetValueOrDefault(actual.Recibe.Id);
+            }
+        }
+        return ordenadas;
     }
 
     public async Task<Participante?> ObtenerParticipanteAsync(int id)
