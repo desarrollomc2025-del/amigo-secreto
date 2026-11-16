@@ -1,0 +1,50 @@
+# App + SQL Server Express + Caddy (HTTPS automático con Let's Encrypt) en una sola EC2.
+# Variables en deploy/aws/.env (ver .env.example).
+services:
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Express
+      MSSQL_SA_PASSWORD: ${SQL_PASSWORD}
+      MSSQL_MEMORY_LIMIT_MB: "1024"
+    volumes:
+      - sqldata:/var/opt/mssql
+
+  app:
+    build:
+      context: ../..
+    restart: unless-stopped
+    depends_on: [sql]
+    environment:
+      ConnectionStrings__Sql: "Server=sql,1433;Database=AmigoSecreto;User Id=sa;Password=${SQL_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ADMIN_KEY: ${ADMIN_KEY}
+      Correo__Host: ${CORREO_HOST:-}
+      Correo__Puerto: ${CORREO_PUERTO:-587}
+      Correo__Usuario: ${CORREO_USUARIO:-}
+      Correo__Clave: ${CORREO_CLAVE:-}
+      Correo__Remitente: ${CORREO_REMITENTE:-}
+      TZ: America/Mexico_City
+    volumes:
+      - llaves:/llaves
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMINIO: ${DOMINIO}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+
+volumes:
+  sqldata:
+  llaves:
+  caddydata:
+  caddyconfig:

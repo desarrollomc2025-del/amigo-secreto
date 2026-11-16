@@ -363,3 +363,7 @@ code { background: #f6efe6; padding: .1rem .35rem; border-radius: 6px; }
     *, *::before, *::after { animation: none !important; transition: none !important; }
     .nieve { display: none; }
 }
+
+/* Campos obligatorios */
+.obligatorio { color: #d93a3a; font-weight: 700; }
+.nota-obligatorios { margin: 0 0 1rem; }

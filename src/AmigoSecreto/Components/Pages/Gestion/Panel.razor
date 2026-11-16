@@ -3,7 +3,7 @@
 @inject IntercambioService Servicio
 @inject NavigationManager Navegacion
 
-<PageTitle>Gestión · Amigo Secreto</PageTitle>
+<PageTitle>Gestión · Red Cetino-Monteagudo-Rivera</PageTitle>
 
 <section class="tarjeta">
     <div class="titulo-con-accion">
@@ -70,6 +70,13 @@
                     ↩️ Reiniciar sorteo
                 </button>
             }
+            @if (resumen.Participantes.Count > 0)
+            {
+                <button type="submit" form="frm-acciones" name="Accion" value="limpiar" class="btn btn-peligro"
+                        data-confirm="¿Limpiar TODO? Se borrarán las @resumen.Participantes.Count inscripciones y el sorteo, y se abrirán las inscripciones para un intercambio nuevo. Esta acción no se puede deshacer.">
+                    🧹 Limpiar todo
+                </button>
+            }
         </div>
     }
 </section>
@@ -90,6 +97,7 @@
                     <li>
                         <div class="participante-info">
                             <strong>@p.NombreCompleto</strong>
+                            <small>@(p.Correo ?? "sin correo")</small>
                             <span class="etiqueta @(p.Asistira ? "etiqueta-si" : "etiqueta-no")">@(p.Asistira ? "Asistirá" : "No asistirá")</span>
                             <small>Inscrito el @HoraGuatemala.Formatear(p.FechaInscripcionUtc)</small>
                         </div>
@@ -144,6 +152,7 @@
             "sorteado" => "🎉 ¡Sorteo realizado! Las inscripciones quedaron cerradas.",
             "rehecho" => "🔁 Se generó una nueva asignación.",
             "reiniciado" => "↩️ Sorteo reiniciado: se borraron las asignaciones y las inscripciones están abiertas.",
+            "limpiado" => "🧹 Se borraron todas las inscripciones y el sorteo. Todo listo para un intercambio nuevo.",
             _ => null,
         }
         : null;
@@ -167,6 +176,9 @@
                 return;
             case "reiniciar":
                 await AplicarAsync(Servicio.ReiniciarAsync(), "reiniciado");
+                return;
+            case "limpiar":
+                await AplicarAsync(Servicio.LimpiarTodoAsync(), "limpiado");
                 return;
             default:
                 error = "Acción no reconocida.";

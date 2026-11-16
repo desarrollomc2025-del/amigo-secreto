@@ -1,7 +1,9 @@
 @page "/inscripcion"
 @inject IntercambioService Servicio
+@inject EnviadorCorreo EnviadorCorreo
+@inject NavigationManager Navegacion
 
-<PageTitle>Inscripción · Amigo Secreto</PageTitle>
+<PageTitle>Inscripción · Red Cetino-Monteagudo-Rivera</PageTitle>
 
 @if (codigoGenerado is not null)
 {
@@ -10,6 +12,15 @@
         <h1>¡Ya estás inscrito!</h1>
         <p>Guarda bien este código: lo necesitarás para editar tu inscripción y para descubrir a tu amigo secreto.</p>
         <TarjetaCodigo Codigo="@codigoGenerado" />
+        @if (correoEnviado)
+        {
+            <div class="aviso aviso-exito" role="status">📧 También te lo enviamos a <strong>@correoDestino</strong>. Si no lo ves, revisa la carpeta de spam.</div>
+        }
+        else
+        {
+            <div class="aviso aviso-advertencia" role="status">No pudimos enviarte el código por correo. Anótalo o tómale una captura de pantalla.</div>
+        }
+        <p>📅 El sorteo del amigo secreto se hará <strong>@Evento.FechaSorteo</strong> Después de esa hora, entra con tu código para descubrir a quién le darás tu postre.</p>
         <p class="ayuda">Lo guardamos también en este navegador para rellenarlo automáticamente.</p>
         <div class="acciones">
             <a class="btn btn-secundario" href="consulta">Ver o editar mi inscripción</a>
@@ -52,6 +63,8 @@ else
 
     private bool sorteoRealizado;
     private string? codigoGenerado;
+    private string? correoDestino;
+    private bool correoEnviado;
     private string? error;
 
     protected override async Task OnInitializedAsync()
@@ -63,9 +76,15 @@ else
     private async Task InscribirAsync()
     {
         var resultado = await Servicio.InscribirAsync(Form!);
-        if (resultado.Ok)
-            codigoGenerado = resultado.Codigo;
-        else
+        if (!resultado.Ok)
+        {
             error = resultado.Error;
+            return;
+        }
+
+        codigoGenerado = resultado.Codigo;
+        correoDestino = Correo.Normalizar(Form!.Correo);
+        correoEnviado = await EnviadorCorreo.EnviarCodigoAsync(
+            correoDestino, Texto.Limpiar(Form.NombreCompleto), codigoGenerado!, Navegacion.ToAbsoluteUri("consulta").ToString());
     }
 }

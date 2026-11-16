@@ -34,6 +34,10 @@ public sealed class InicializadorBaseDatos(IServiceScopeFactory scopeFactory, IL
                 await using var scope = scopeFactory.CreateAsyncScope();
                 var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
                 var creada = await db.Database.EnsureCreatedAsync(stoppingToken);
+                // EnsureCreated no modifica tablas existentes: las columnas agregadas después se crean aquí.
+                await db.Database.ExecuteSqlRawAsync(
+                    "IF COL_LENGTH('Participantes', 'Correo') IS NULL ALTER TABLE Participantes ADD Correo nvarchar(254) NULL;",
+                    stoppingToken);
                 logger.LogInformation(creada
                     ? "Tablas de la base de datos creadas."
                     : "La base de datos ya tenía las tablas.");

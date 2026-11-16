@@ -69,6 +69,7 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
                     Postre = Texto.Limpiar(form.Postre),
                     LugarCompra = Texto.Limpiar(form.LugarCompra),
                     Asistira = form.Asistira == true,
+                    Correo = Correo.Normalizar(form.Correo),
                     Codigo = codigo,
                     FechaInscripcionUtc = DateTime.UtcNow,
                 });
@@ -125,6 +126,7 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
                 p.Postre = Texto.Limpiar(form.Postre);
                 p.LugarCompra = Texto.Limpiar(form.LugarCompra);
                 p.Asistira = form.Asistira == true;
+                p.Correo = Correo.Normalizar(form.Correo);
                 p.FechaActualizacionUtc = DateTime.UtcNow;
                 await db.SaveChangesAsync();
                 return Resultado.Exito(codigo);
@@ -189,6 +191,23 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
             estado.FechaSorteoUtc = null;
             await db.SaveChangesAsync();
             logger.LogInformation("Sorteo reiniciado; inscripciones abiertas.");
+            return Resultado.Exito();
+        });
+    }
+
+    /// <summary>Borra todas las inscripciones y asignaciones y reabre las inscripciones (para un intercambio nuevo).</summary>
+    public async Task<Resultado> LimpiarTodoAsync()
+    {
+        await inicializador.EsperarAsync();
+        return await EnTransaccionAsync(async () =>
+        {
+            var estado = await EstadoAsync();
+            await db.Asignaciones.ExecuteDeleteAsync();
+            var borrados = await db.Participantes.ExecuteDeleteAsync();
+            estado.Realizado = false;
+            estado.FechaSorteoUtc = null;
+            await db.SaveChangesAsync();
+            logger.LogWarning("Datos limpiados: se borraron {Cantidad} inscripciones y todas las asignaciones.", borrados);
             return Resultado.Exito();
         });
     }

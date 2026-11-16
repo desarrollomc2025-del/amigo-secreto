@@ -1,29 +1,39 @@
 @* El parámetro se llama "Form" a propósito: los nombres de los campos HTML salen de la expresión
    (Form.NombreCompleto, ...) y deben coincidir con la propiedad [SupplyParameterFromForm] "Form" de la página. *@
 
+<p class="ayuda nota-obligatorios"><span class="obligatorio">*</span> Todos los campos son obligatorios.</p>
+
 <div class="campo">
-    <label for="nombre">Nombre completo</label>
+    <label for="nombre">Nombre completo <span class="obligatorio" aria-hidden="true">*</span></label>
     <InputText id="nombre" @bind-Value="Form.NombreCompleto" autocomplete="name"
                required minlength="3" maxlength="100" placeholder="Ej.: María José López" />
     <ValidationMessage For="() => Form.NombreCompleto" class="error-campo" />
 </div>
 
 <div class="campo">
-    <label for="postre">¿Qué postre te gustaría recibir?</label>
+    <label for="correo">Correo electrónico <span class="obligatorio" aria-hidden="true">*</span></label>
+    <InputText id="correo" type="email" @bind-Value="Form.Correo" autocomplete="email" inputmode="email"
+               required maxlength="254" spellcheck="false" placeholder="Ej.: maria.lopez@gmail.com" />
+    <p class="ayuda">Te enviaremos ahí tu código personal.</p>
+    <ValidationMessage For="() => Form.Correo" class="error-campo" />
+</div>
+
+<div class="campo">
+    <label for="postre">¿Qué postre te gustaría recibir? <span class="obligatorio" aria-hidden="true">*</span></label>
     <InputText id="postre" @bind-Value="Form.Postre" autocomplete="off"
                required minlength="2" maxlength="150" placeholder="Ej.: Pie de limón" />
     <ValidationMessage For="() => Form.Postre" class="error-campo" />
 </div>
 
 <div class="campo">
-    <label for="lugar">¿Dónde se puede comprar?</label>
+    <label for="lugar">¿Dónde se puede comprar? <span class="obligatorio" aria-hidden="true">*</span></label>
     <InputText id="lugar" @bind-Value="Form.LugarCompra" autocomplete="off"
                required minlength="2" maxlength="150" placeholder="Ej.: Pastelería La Esperanza, zona 10" />
     <ValidationMessage For="() => Form.LugarCompra" class="error-campo" />
 </div>
 
 <fieldset class="campo">
-    <legend>¿Asistirás al convivio?</legend>
+    <legend>¿Asistirás al convivio? <span class="obligatorio" aria-hidden="true">*</span></legend>
     <InputRadioGroup @bind-Value="Form.Asistira">
         <div class="opciones">
             <label class="opcion">

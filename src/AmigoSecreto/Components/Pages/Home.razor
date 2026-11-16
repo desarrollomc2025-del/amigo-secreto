@@ -1,7 +1,7 @@
 ﻿@page "/"
 @inject IntercambioService Servicio
 
-<PageTitle>Amigo Secreto · Intercambio de postres</PageTitle>
+<PageTitle>Red Cetino-Monteagudo-Rivera · Intercambio de postres</PageTitle>
 
 <section class="tarjeta portada">
     <div class="portada-adorno" aria-hidden="true">🎄🍰🎁</div>
@@ -20,6 +20,7 @@
     }
     else
     {
+        <div class="aviso aviso-exito">📅 El sorteo del amigo secreto se hará <strong>@Evento.FechaSorteo</strong></div>
         <div class="acciones">
             <a class="btn btn-primario btn-grande" href="inscripcion">✍️ Inscribirme</a>
             <a class="btn btn-secundario btn-grande" href="consulta">🔑 Ya tengo mi código</a>
@@ -32,7 +33,7 @@
     <ol>
         <li><strong>Inscríbete</strong> con tu nombre, el postre que quieres y dónde se compra.</li>
         <li><strong>Guarda tu código</strong> de 6 caracteres. Con él puedes editar tu inscripción.</li>
-        <li><strong>Espera el sorteo.</strong> Al cerrarse las inscripciones, el organizador lo realiza.</li>
+        <li><strong>Espera el sorteo</strong> @Evento.FechaSorteo Al cerrarse las inscripciones, el organizador lo realiza.</li>
         <li><strong>Abre tu regalo</strong> con tu código y descubre a quién le regalarás. 🤫</li>
     </ol>
 </section>

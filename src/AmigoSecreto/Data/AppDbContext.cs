@@ -17,6 +17,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.Property(p => p.NombreNormalizado).HasMaxLength(100);
             e.Property(p => p.Postre).HasMaxLength(150);
             e.Property(p => p.LugarCompra).HasMaxLength(150);
+            e.Property(p => p.Correo).HasMaxLength(Servicios.Correo.LongitudMaxima);
             e.Property(p => p.Codigo).HasMaxLength(6).IsFixedLength().IsUnicode(false);
             e.HasIndex(p => p.NombreNormalizado).IsUnique();
             e.HasIndex(p => p.Codigo).IsUnique();

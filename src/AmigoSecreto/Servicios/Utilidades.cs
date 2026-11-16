@@ -72,3 +72,31 @@ public static class HoraGuatemala
     public static string Formatear(DateTime utc) =>
         DateTime.SpecifyKind(utc, DateTimeKind.Utc).Add(Desfase).ToString("dd/MM/yyyy h:mm tt", Cultura);
 }
+
+/// <summary>Validación y normalización de correos electrónicos.</summary>
+public static partial class Correo
+{
+    public const int LongitudMaxima = 254;
+
+    // usuario@dominio.tld: sin espacios, un solo @, dominio con al menos un punto y TLD de 2+ letras.
+    [GeneratedRegex(@"^[A-Za-z0-9._%+'-]+@(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,24}$")]
+    private static partial Regex Formato();
+
+    public static string Normalizar(string? valor) => (valor ?? string.Empty).Trim().ToLowerInvariant();
+
+    public static bool EsValido(string? valor)
+    {
+        var correo = Normalizar(valor);
+        if (correo.Length is 0 or > LongitudMaxima) return false;
+        if (!Formato().IsMatch(correo)) return false;
+        var usuario = correo[..correo.IndexOf('@')];
+        // Sin puntos al inicio/fin ni puntos seguidos en la parte local.
+        return usuario.Length <= 64 && !usuario.StartsWith('.') && !usuario.EndsWith('.') && !usuario.Contains("..");
+    }
+}
+
+/// <summary>Datos del evento que se muestran en la página y en el correo.</summary>
+public static class Evento
+{
+    public const string FechaSorteo = "el sábado 21 de noviembre a las 9:00 p. m.";
+}

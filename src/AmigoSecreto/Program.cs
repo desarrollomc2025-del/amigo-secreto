@@ -3,6 +3,7 @@ using AmigoSecreto.Components;
 using AmigoSecreto.Data;
 using AmigoSecreto.Servicios;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
@@ -27,6 +28,18 @@ builder.Services.AddSingleton<InicializadorBaseDatos>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<InicializadorBaseDatos>());
 builder.Services.AddScoped<IntercambioService>();
 builder.Services.AddSingleton<ClaveAdministracion>();
+builder.Services.AddSingleton(builder.Configuration.GetSection("Correo").Get<OpcionesCorreo>() ?? new OpcionesCorreo());
+builder.Services.AddSingleton<EnviadorCorreo>();
+
+// ---------- Llaves de Data Protection (cookies de gestión y antiforgery) ----------
+// En un contenedor hay que guardarlas en un volumen; si no, se pierden al reiniciar y las cookies dejan de valer.
+var rutaLlaves = builder.Configuration["DataProtection:Ruta"];
+if (!string.IsNullOrWhiteSpace(rutaLlaves))
+{
+    builder.Services.AddDataProtection()
+        .SetApplicationName("AmigoSecreto")
+        .PersistKeysToFileSystem(new DirectoryInfo(rutaLlaves));
+}
 
 // ---------- Componentes: solo renderizado estático en servidor (sin WebSockets) ----------
 builder.Services.AddRazorComponents();

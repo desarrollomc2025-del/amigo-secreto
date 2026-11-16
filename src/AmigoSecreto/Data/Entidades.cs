@@ -12,6 +12,9 @@ public sealed class Participante
     public required string LugarCompra { get; set; }
     public bool Asistira { get; set; }
 
+    /// <summary>Correo para enviarle su código. Nulo en inscripciones anteriores a este campo.</summary>
+    public string? Correo { get; set; }
+
     /// <summary>Código personal de 6 caracteres (ver <see cref="Servicios.CodigoPersonal"/>).</summary>
     public required string Codigo { get; set; }
 

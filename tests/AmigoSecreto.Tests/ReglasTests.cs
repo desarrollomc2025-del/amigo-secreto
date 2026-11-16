@@ -96,3 +96,36 @@ public class HoraGuatemalaTests
     public void Formatear_resta_seis_horas() =>
         Assert.StartsWith("24/12/2026 6:30", HoraGuatemala.Formatear(new DateTime(2026, 12, 25, 0, 30, 0, DateTimeKind.Utc)));
 }
+
+public class CorreoTests
+{
+    [Theory]
+    [InlineData("maria.lopez@gmail.com")]
+    [InlineData("  Juan_Perez+postres@Outlook.COM ")]
+    [InlineData("a@empresa.com.gt")]
+    [InlineData("o'neil@sub-dominio.org")]
+    public void Acepta_correos_validos(string correo) => Assert.True(Correo.EsValido(correo));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("maria")]
+    [InlineData("maria@")]
+    [InlineData("maria@gmail")]
+    [InlineData("@gmail.com")]
+    [InlineData("maria lopez@gmail.com")]
+    [InlineData("maria@@gmail.com")]
+    [InlineData(".maria@gmail.com")]
+    [InlineData("maria.@gmail.com")]
+    [InlineData("ma..ria@gmail.com")]
+    [InlineData("maria@-gmail.com")]
+    [InlineData("maria@gmail.c")]
+    public void Rechaza_correos_invalidos(string correo) => Assert.False(Correo.EsValido(correo));
+
+    [Fact]
+    public void Normaliza_a_minusculas_sin_espacios() =>
+        Assert.Equal("juan@outlook.com", Correo.Normalizar("  Juan@Outlook.COM "));
+
+    [Fact]
+    public void El_atributo_deja_el_vacio_a_Required() =>
+        Assert.True(new CorreoValidoAttribute().IsValid(""));
+}

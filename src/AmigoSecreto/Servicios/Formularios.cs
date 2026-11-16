@@ -17,6 +17,10 @@ public sealed class ParticipanteForm
     [StringLength(150, MinimumLength = 2, ErrorMessage = "El lugar de compra debe tener entre 2 y 150 caracteres.")]
     public string? LugarCompra { get; set; }
 
+    [Required(ErrorMessage = "Escribe tu correo electrónico.")]
+    [CorreoValido]
+    public string? Correo { get; set; }
+
     [Required(ErrorMessage = "Indica si asistirás al convivio.")]
     public bool? Asistira { get; set; }
 
@@ -29,8 +33,20 @@ public sealed class ParticipanteForm
         Postre = p.Postre,
         LugarCompra = p.LugarCompra,
         Asistira = p.Asistira,
+        Correo = p.Correo,
         Codigo = p.Codigo,
     };
+}
+
+/// <summary>Valida el formato del correo con <see cref="Correo.EsValido"/>.</summary>
+[AttributeUsage(AttributeTargets.Property)]
+public sealed class CorreoValidoAttribute : ValidationAttribute
+{
+    public CorreoValidoAttribute() : base("Escribe un correo electrónico válido, por ejemplo nombre@gmail.com.") { }
+
+    // El campo vacío lo resuelve [Required].
+    public override bool IsValid(object? value) =>
+        value is not string s || string.IsNullOrWhiteSpace(s) || Correo.EsValido(s);
 }
 
 public sealed class BusquedaForm
