@@ -1,0 +1,33 @@
+name: Compilar y probar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restaurar
+        run: dotnet restore
+
+      - name: Compilar
+        run: dotnet build --no-restore -c Release
+
+      - name: Pruebas
+        run: dotnet test --no-build -c Release
+
+      - name: Construir imagen Docker
+        run: docker build -t amigosecreto:ci .

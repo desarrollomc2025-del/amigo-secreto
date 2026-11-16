@@ -4,7 +4,7 @@ namespace AmigoSecreto.Data;
 
 /// <summary>
 /// Crea las tablas al iniciar la app. Corre en segundo plano y reintenta, porque la base
-/// serverless de Azure SQL puede estar pausada y tardar hasta un minuto en reanudarse.
+/// SQL Server puede tardar unos segundos en aceptar conexiones cuando arranca junto con la app.
 /// Las consultas esperan a que termine mediante <see cref="EsperarAsync"/>.
 /// </summary>
 public sealed class InicializadorBaseDatos(IServiceScopeFactory scopeFactory, ILogger<InicializadorBaseDatos> logger)

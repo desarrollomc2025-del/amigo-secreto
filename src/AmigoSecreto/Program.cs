@@ -10,16 +10,16 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ---------- Base de datos (Azure SQL serverless: puede estar pausada, por eso los reintentos) ----------
+// ---------- Base de datos (con reintentos: SQL Server puede tardar en arrancar junto con la app) ----------
 var cadenaSql = builder.Configuration.GetConnectionString("Sql") ?? builder.Configuration["Sql"];
 if (string.IsNullOrWhiteSpace(cadenaSql))
 {
     throw new InvalidOperationException(
         "Falta la cadena de conexión 'Sql'. En local: dotnet user-secrets set \"ConnectionStrings:Sql\" \"...\". " +
-        "En Azure: App Service > Configuración > Cadenas de conexión > Sql.");
+        "En Docker: variable de entorno ConnectionStrings__Sql (ver deploy/aws/docker-compose.yml).");
 }
 var csb = new SqlConnectionStringBuilder(cadenaSql);
-if (csb.ConnectTimeout < 60) csb.ConnectTimeout = 60; // reanudar una base pausada puede tardar ~1 minuto
+if (csb.ConnectTimeout < 60) csb.ConnectTimeout = 60; // margen amplio por si SQL Server todavía está arrancando
 
 builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(csb.ConnectionString, sql =>
     sql.EnableRetryOnFailure(maxRetryCount: 8, maxRetryDelay: TimeSpan.FromSeconds(15), errorNumbersToAdd: null)));

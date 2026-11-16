@@ -1,18 +1,19 @@
-# 🎁 Amigo Secreto · Intercambio de postres
+# 🎁 Red Cetino-Monteagudo-Rivera · Intercambio de postres
 
-Aplicación web para organizar el intercambio de postres de un convivio entre amigos.
+Aplicación web (amigo secreto) para organizar el intercambio de postres del convivio de la Red Cetino-Monteagudo-Rivera.
 
-- **Participantes** (sin cuenta): se inscriben, reciben un código personal de 6 caracteres, pueden editar su inscripción hasta el sorteo y después abren un regalo animado que revela a su amigo secreto.
-- **Organizador** (`/gestion`, protegido con `ADMIN_KEY`): ve totales y la lista de inscritos, realiza/rehace/reinicia el sorteo, elimina inscripciones y recupera códigos perdidos. **Nunca** ve las asignaciones.
+- **Participantes** (sin cuenta): se inscriben (nombre, correo, postre, lugar de compra y asistencia; todo obligatorio), reciben un código personal de 6 caracteres en pantalla y por correo, pueden editar su inscripción hasta el sorteo y después abren un regalo animado que revela a su amigo secreto.
+- **Organizador** (`/gestion`, protegido con `ADMIN_KEY`): ve totales y la lista de inscritos, realiza/rehace/reinicia el sorteo, elimina inscripciones, recupera códigos perdidos y puede **limpiar todo** (borrar inscripciones y sorteo) para empezar de nuevo. **Nunca** ve las asignaciones.
 
 ## Tecnología
 
 | Pieza | Detalle |
 |---|---|
 | Web | Blazor Web App, .NET 10, **solo renderizado estático en servidor** (sin WebSockets ni `blazor.web.js`) |
-| Datos | Entity Framework Core 10 + Azure SQL Database (serverless, oferta gratuita) con reintentos de conexión |
-| Hosting | Azure App Service Linux, plan **F1** (gratuito) |
-| CI/CD | GitHub Actions (`.github/workflows/azure-app-service.yml`) |
+| Datos | Entity Framework Core 10 + SQL Server 2022 Express (contenedor) con reintentos de conexión |
+| Hosting | AWS EC2 (Amazon Linux 2023) con Docker Compose y Caddy (HTTPS automático) |
+| Correo | SMTP con MailKit (p. ej. Gmail con contraseña de aplicación) |
+| CI | GitHub Actions (`.github/workflows/ci.yml`): compila y prueba |
 
 ### Estructura
 
@@ -20,10 +21,12 @@ Aplicación web para organizar el intercambio de postres de un convivio entre am
 src/AmigoSecreto/
   Program.cs                  Configuración: BD, cookie de gestión, límites de envíos, cabeceras
   Data/                       Entidades, DbContext e inicializador (crea las tablas al iniciar)
-  Servicios/                  Lógica del intercambio, sorteo, códigos, clave de administración
+  Servicios/                  Lógica del intercambio, sorteo, códigos, correo, clave de administración
   Components/Pages/           Inicio, Inscripción, Consulta (mi código), Gestión, errores
   wwwroot/app.css, app.js     Estilo navideño y mejoras (copiar código, regalo, confeti)
-tests/AmigoSecreto.Tests/     Pruebas del sorteo, normalización de nombres y códigos
+tests/AmigoSecreto.Tests/     Pruebas del sorteo, nombres, códigos y validación de correo
+deploy/aws/                   docker-compose, Caddyfile, .env.example y user-data de la EC2
+Dockerfile                    Imagen de la app
 ```
 
 ## Reglas principales
@@ -33,7 +36,8 @@ tests/AmigoSecreto.Tests/     Pruebas del sorteo, normalización de nombres y c�
 - **Sorteo**: solo participan quienes asistirán (mínimo 3). Se barajan con generador criptográfico y se forma **un solo ciclo** A→B→C→…→A: nadie se toca a sí mismo y funciona con números impares. Al sortear se cierran las inscripciones.
 - **Privacidad**: las asignaciones solo se envían al navegador de cada participante cuando ingresa **su propio** código. El panel de gestión solo muestra la cantidad.
 - **Seguridad**: antiforgery en todos los formularios; validación en cliente (HTML5) y servidor (DataAnnotations); clave comparada en tiempo constante (hash SHA-256 + `FixedTimeEquals`); cookie de gestión HttpOnly, Secure, SameSite=Strict y firmada/cifrada por Data Protection; límite de envíos por IP (10 intentos de acceso cada 5 min, 60 envíos por minuto); `Cache-Control: no-store` en páginas.
-- **Fechas**: se guardan en UTC y se muestran en hora de Guatemala (UTC-6).
+- **Fechas**: se guardan en UTC y se muestran en hora de Guatemala (UTC-6). La fecha del sorteo que se anuncia está en `Evento.FechaSorteo` (`Servicios/Utilidades.cs`).
+- **Correo**: obligatorio y validado (formato `usuario@dominio.tld`); se guarda en minúsculas. Las bases creadas antes de este campo reciben la columna al iniciar la app.
 
 ## Ejecutar en local
 
@@ -59,53 +63,72 @@ Pruebas:
 dotnet test
 ```
 
-## Publicar en Azure
+## Publicar en AWS (EC2 + Docker)
 
-### 1. Base de datos: Azure SQL (oferta gratuita)
+Todo corre en una sola instancia EC2 con Docker Compose (`deploy/aws/docker-compose.yml`):
 
-1. En el portal de Azure, ve a **Crear un recurso → SQL Database**.
-2. En la parte superior, pulsa **Aplicar oferta** (*Free offer*).
-3. Crea un servidor nuevo con **autenticación SQL** (usuario y contraseña) y guarda los datos.
-4. En *Comportamiento cuando se alcanza el límite gratuito*, elige **Pausar automáticamente la base de datos hasta el próximo mes** para no generar cobros.
-5. En **Redes**, activa **Permitir que los servicios y recursos de Azure accedan a este servidor**.
-6. Cuando se cree, ve a **Cadenas de conexión → ADO.NET (autenticación SQL)** y copia la cadena (reemplaza `{your_password}`).
+| Contenedor | Función |
+|---|---|
+| `app` | La aplicación (imagen construida con el `Dockerfile` de la raíz). Las llaves de Data Protection se guardan en el volumen `llaves`. |
+| `sql` | SQL Server 2022 **Express** con los datos en el volumen `sqldata`. |
+| `caddy` | Proxy inverso con **HTTPS automático** (Let's Encrypt) en los puertos 80/443. |
 
-> La base serverless se pausa cuando no se usa. La primera solicitud puede tardar hasta ~1 minuto mientras se reanuda: la app usa reintentos y un tiempo de conexión de 60 s.
+### 1. Crear la instancia
 
-### 2. Aplicación: Azure App Service (Linux, F1)
+- **AMI**: Amazon Linux 2023 (x86_64). **Tipo**: al menos 4 GB de RAM (SQL Server no arranca con menos de ~2 GB), p. ej. `c7i-flex.large`. Disco gp3 de 20 GB.
+- **Security group**: 80 y 443 abiertos a todos; 22 (SSH) solo a tu IP.
+- **User data**: el contenido de `deploy/aws/user-data.sh` (instala Docker y Compose, crea 2 GB de swap y clona este repositorio en `~/amigo-secreto`).
+- Asocia una **Elastic IP** para que la dirección no cambie.
 
-1. **Crear un recurso → Aplicación web**.
-   - Publicar: **Código** · Pila del entorno de ejecución: **.NET 10** · Sistema operativo: **Linux**
-   - Plan de precios: **Gratis F1**
-2. En la aplicación web, ve a **Configuración → Variables de entorno**:
-   - Pestaña **Cadenas de conexión**: nombre `Sql`, valor la cadena del paso anterior, tipo `SQLAzure`.
-   - Pestaña **Configuración de la aplicación**: nombre `ADMIN_KEY`, valor una clave de **al menos 12 caracteres**.
-3. En **Configuración → General**, deja **Solo HTTPS** activado.
+### 2. Dominio
 
-Notas del plan F1: no tiene *Always On*, así que la app se duerme tras unos 20 minutos sin uso y la primera visita tarda unos segundos. Tiene 60 minutos de CPU al día, suficiente para un convivio.
+Crea un registro **A** del dominio apuntando a la Elastic IP (en Cloudflare, con la nube **gris / DNS only**: el certificado lo saca Caddy y el límite de envíos por IP necesita la IP real del visitante). Sin dominio propio puedes usar `<ip-con-guiones>.sslip.io`, p. ej. `3-12-95-79.sslip.io`.
 
-### 3. Publicación automática desde GitHub
+### 3. Configurar y levantar
 
-El flujo `.github/workflows/azure-app-service.yml` compila y prueba cada push y PR. Con cada push a `main` además publica la app, siempre que esté configurado:
-
-1. En App Service, **Configuración → General → Credenciales de publicación básicas de SCM: Activado** (es necesario para el perfil de publicación).
-2. En **Información general → Descargar perfil de publicación**.
-3. En GitHub, ve a **Settings → Secrets and variables → Actions**:
-   - **Secrets** → `AZURE_WEBAPP_PUBLISH_PROFILE` = contenido completo del archivo descargado.
-   - **Variables** → `AZURE_WEBAPP_NAME` = nombre de tu aplicación web.
-4. Haz push a `main`, o ejecuta el flujo a mano desde la pestaña **Actions**.
-
-### Alternativa: publicación manual
-
-```powershell
-dotnet publish src/AmigoSecreto -c Release -o publish
-Compress-Archive -Path publish/* -DestinationPath app.zip -Force
-az webapp deploy --resource-group <grupo> --name <app> --src-path app.zip --type zip
+```bash
+ssh -i amigosecreto-key.pem ec2-user@<ip>
+cd ~/amigo-secreto/deploy/aws
+cp .env.example .env && chmod 600 .env
+nano .env          # DOMINIO, SQL_PASSWORD, ADMIN_KEY y CORREO_*
+docker compose up -d --build
 ```
+
+`DOMINIO` acepta varios nombres separados por comas (p. ej. `midominio.org, www.midominio.org`). Las tablas se crean solas al iniciar.
+
+### 4. Envío del código por correo
+
+La app envía a cada inscrito un correo con su código por SMTP (MailKit). Con Gmail:
+
+1. Activa la **verificación en 2 pasos** de la cuenta y crea una **contraseña de aplicación** en <https://myaccount.google.com/apppasswords>.
+2. En `.env`: `CORREO_HOST=smtp.gmail.com`, `CORREO_PUERTO=587`, `CORREO_USUARIO` y `CORREO_REMITENTE` = la cuenta, `CORREO_CLAVE` = la contraseña de aplicación (16 letras, sin espacios).
+3. `docker compose up -d app` para aplicar.
+
+Si el correo no está configurado la app funciona igual y le pide al participante que anote su código.
+
+### Actualizar a una nueva versión
+
+```bash
+cd ~/amigo-secreto && git pull && cd deploy/aws && docker compose up -d --build
+```
+
+### Comandos útiles
+
+```bash
+docker compose ps                 # estado de los contenedores
+docker compose logs -f app        # registros de la app
+docker compose restart caddy      # reintentar el certificado tras cambiar el DNS
+```
+
+> Los datos viven en los volúmenes de Docker de la instancia. Para respaldarlos: `docker compose exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SQL_PASSWORD" -Q "BACKUP DATABASE AmigoSecreto TO DISK='/var/opt/mssql/respaldo.bak'"`.
+
+## Integración continua
+
+`.github/workflows/ci.yml` compila y ejecuta las pruebas en cada push y pull request a `main`.
 
 ## Uso el día del convivio
 
-1. Comparte la URL para que todos se inscriban.
+1. Comparte la URL para que todos se inscriban (si hiciste pruebas antes, usa **Limpiar todo** en `/gestion` primero).
 2. Revisa en `/gestion` que todos los asistentes estén inscritos.
 3. Pulsa **Realizar sorteo**: se cierran las inscripciones.
 4. Cada quien entra con su código y abre su regalo 🎁.
