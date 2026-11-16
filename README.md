@@ -5,7 +5,7 @@ Aplicación web (amigo secreto) para organizar el intercambio de postres del con
 - **Participantes** (sin cuenta): se inscriben (nombre, correo, postre, lugar de compra y asistencia; todo obligatorio), reciben un código personal de 6 caracteres en pantalla y por correo, pueden editar su inscripción hasta el sorteo y después abren un regalo animado que revela a su amigo secreto.
 - **Organizador** (`/gestion`, protegido con `ADMIN_KEY`): ve totales y la lista de inscritos, realiza/rehace/reinicia el sorteo, elimina inscripciones, recupera códigos perdidos y puede **limpiar todo** (borrar inscripciones y sorteo) para empezar de nuevo. **Nunca** ve las asignaciones.
 
-📖 **[Manual de usuario](docs/MANUAL-USUARIO.md)** para participantes y organizador.
+📖 **[Manual de usuario](docs/MANUAL-USUARIO.md)** ([PDF](docs/MANUAL-USUARIO.pdf)) para participantes y organizador.
 
 ## Tecnología
 
