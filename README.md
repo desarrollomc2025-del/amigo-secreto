@@ -78,7 +78,7 @@ Todo corre en una sola instancia EC2 con Docker Compose (`deploy/aws/docker-comp
 ### 1. Crear la instancia
 
 - **AMI**: Amazon Linux 2023 (x86_64). **Tipo**: al menos 4 GB de RAM (SQL Server no arranca con menos de ~2 GB), p. ej. `c7i-flex.large`. Disco gp3 de 20 GB.
-- **Security group**: 80 y 443 abiertos a todos; 22 (SSH) solo a tu IP.
+- **Security group**: 80 y 443 abiertos a todos. El puerto 22 (SSH) está cerrado: la administración se hace por AWS Systems Manager (ver «Actualizar a una nueva versión»). Si alguna vez necesitas SSH, ábrelo temporalmente solo a tu IP.
 - **User data**: el contenido de `deploy/aws/user-data.sh` (instala Docker y Compose, crea 2 GB de swap y clona este repositorio en `~/amigo-secreto`).
 - Asocia una **Elastic IP** para que la dirección no cambie.
 
@@ -118,7 +118,7 @@ deploy/aws/desplegar.sh
 
 Usa **AWS Systems Manager**: la instancia tiene el rol `AmigoSecretoEC2Role` (política `AmazonSSMManagedInstanceCore`) y el script ejecuta `git pull` + `docker compose up -d --build` como `ec2-user`. Variables opcionales: `INSTANCIA`, `REGION`.
 
-Por SSH (requiere que tu IP esté permitida en el puerto 22):
+Por SSH (requiere abrir temporalmente el puerto 22 a tu IP):
 
 ```bash
 cd ~/amigo-secreto && git pull && cd deploy/aws && docker compose up -d --build
