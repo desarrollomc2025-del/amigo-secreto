@@ -110,6 +110,16 @@ Si el correo no está configurado la app funciona igual y le pide al participant
 
 ### Actualizar a una nueva versión
 
+Desde tu computadora (Git Bash), sin SSH y desde cualquier red, con una sesión válida de AWS CLI (`aws login`):
+
+```bash
+deploy/aws/desplegar.sh
+```
+
+Usa **AWS Systems Manager**: la instancia tiene el rol `AmigoSecretoEC2Role` (política `AmazonSSMManagedInstanceCore`) y el script ejecuta `git pull` + `docker compose up -d --build` como `ec2-user`. Variables opcionales: `INSTANCIA`, `REGION`.
+
+Por SSH (requiere que tu IP esté permitida en el puerto 22):
+
 ```bash
 cd ~/amigo-secreto && git pull && cd deploy/aws && docker compose up -d --build
 ```
