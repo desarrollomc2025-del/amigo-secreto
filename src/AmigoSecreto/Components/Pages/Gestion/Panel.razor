@@ -2,6 +2,7 @@
 @attribute [Authorize(Policy = Politicas.Organizador)]
 @inject IntercambioService Servicio
 @inject NavigationManager Navegacion
+@inject EnviadorCorreo Enviador
 
 <PageTitle>Gestión · Red Cetino-Monteagudo-Rivera</PageTitle>
 
@@ -62,6 +63,10 @@
             else
             {
                 <a href="gestion/parejas" class="btn btn-primario">🔒 Ver parejas</a>
+                <button type="submit" form="frm-acciones" name="Accion" value="enviar-correos" class="btn btn-secundario"
+                        data-confirm="¿Enviar por correo a cada participante el nombre de su amigo secreto, el postre y dónde comprarlo? Si ya lo enviaste antes, lo recibirán otra vez.">
+                    📧 Enviar amigo secreto por correo
+                </button>
                 <button type="submit" form="frm-acciones" name="Accion" value="rehacer" class="btn btn-secundario"
                         data-confirm="¿Rehacer el sorteo? Se generará una asignación nueva y la anterior se perderá. Quienes ya vieron a su amigo secreto verán uno distinto.">
                     🔁 Rehacer sorteo
@@ -187,10 +192,37 @@
             case "limpiar":
                 await AplicarAsync(Servicio.LimpiarTodoAsync(), "limpiado");
                 return;
+            case "enviar-correos":
+                await EnviarCorreosAsync();
+                return;
             default:
                 error = "Acción no reconocida.";
                 return;
         }
+    }
+
+    private async Task EnviarCorreosAsync()
+    {
+        var parejas = await Servicio.ParejasAsync();
+        if (parejas.Count == 0)
+        {
+            error = "Todavía no se ha realizado el sorteo.";
+            return;
+        }
+
+        var r = await Enviador.EnviarAmigosSecretosAsync(parejas, Navegacion.ToAbsoluteUri("consulta").ToString(),
+            HttpContext.RequestAborted);
+        if (!r.Configurado)
+        {
+            error = "El envío de correos no está configurado en el servidor.";
+            return;
+        }
+
+        exito = $"📧 Se enviaron {r.Enviados} de {parejas.Count} correos con el amigo secreto.";
+        if (r.SinCorreo.Count > 0)
+            exito += $" Sin correo registrado ({r.SinCorreo.Count}): {string.Join(", ", r.SinCorreo)}. Pueden verlo con su código.";
+        if (r.Fallidos.Count > 0)
+            error = $"No se pudo enviar a ({r.Fallidos.Count}): {string.Join(", ", r.Fallidos)}. Puedes intentarlo de nuevo.";
     }
 
     private async Task AplicarAsync(Task<Resultado> operacion, string mensaje)
