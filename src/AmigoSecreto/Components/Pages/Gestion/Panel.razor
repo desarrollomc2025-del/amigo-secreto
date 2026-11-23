@@ -85,7 +85,13 @@
 @if (resumen is not null)
 {
     <section class="tarjeta">
-        <h2>Participantes</h2>
+        <div class="titulo-con-accion">
+            <h2>Participantes</h2>
+            @if (resumen.Participantes.Count > 0)
+            {
+                <a href="gestion/reporte" class="btn btn-chico btn-secundario">📋 Reporte de asistencia</a>
+            }
+        </div>
         @if (resumen.Participantes.Count == 0)
         {
             <p class="ayuda">Todavía no hay inscripciones.</p>

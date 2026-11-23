@@ -50,6 +50,7 @@
     private string Destino => Volver?.TrimEnd('/').ToLowerInvariant() switch
     {
         "/gestion/parejas" => "gestion/parejas",
+        "/gestion/reporte" => "gestion/reporte",
         _ => "gestion",
     };
 

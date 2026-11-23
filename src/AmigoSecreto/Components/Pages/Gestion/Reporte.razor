@@ -1,0 +1,90 @@
+@page "/gestion/reporte"
+@attribute [Authorize(Policy = Politicas.Organizador)]
+@inject IntercambioService Servicio
+
+<PageTitle>Reporte de asistencia · Red Cetino-Monteagudo-Rivera</PageTitle>
+
+<section class="tarjeta reporte">
+    <div class="titulo-con-accion">
+        <h1>📋 Reporte de asistencia</h1>
+        <div class="participante-acciones no-imprimir">
+            <button type="button" class="btn btn-chico btn-secundario" data-print>🖨️ Imprimir / PDF</button>
+            <a href="gestion" class="btn btn-enlace">← Volver al panel</a>
+        </div>
+    </div>
+
+    @if (resumen is null)
+    {
+        <p class="ayuda">Cargando…</p>
+    }
+    else if (resumen.Participantes.Count == 0)
+    {
+        <p class="ayuda">Todavía no hay inscripciones.</p>
+    }
+    else
+    {
+        <p class="ayuda">Generado el @HoraGuatemala.Formatear(DateTime.UtcNow) · @resumen.Participantes.Count inscritos</p>
+
+        <div class="estadisticas">
+            <div class="estadistica"><span class="numero">@resumen.Participantes.Count</span><span>Inscritos</span></div>
+            <div class="estadistica"><span class="numero">@resumen.Asistentes</span><span>Asistirán</span></div>
+            <div class="estadistica"><span class="numero">@resumen.NoAsistentes</span><span>No asistirán</span></div>
+        </div>
+
+        @foreach (var (titulo, clase, grupo) in Grupos)
+        {
+            <h2><span class="etiqueta @clase">@titulo</span> <small>(@grupo.Count)</small></h2>
+            @if (grupo.Count == 0)
+            {
+                <p class="ayuda">Nadie en este grupo.</p>
+            }
+            else
+            {
+                <div class="tabla-desplazable">
+                    <table class="tabla-reporte">
+                        <thead>
+                            <tr>
+                                <th scope="col">#</th>
+                                <th scope="col">Nombre</th>
+                                <th scope="col">Postre</th>
+                                <th scope="col">Lugar de compra</th>
+                                <th scope="col">Correo</th>
+                                <th scope="col">Inscrito</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @for (var i = 0; i < grupo.Count; i++)
+                            {
+                                var p = grupo[i];
+                                <tr>
+                                    <td>@(i + 1)</td>
+                                    <td><strong>@p.NombreCompleto</strong></td>
+                                    <td>@p.Postre</td>
+                                    <td>@p.LugarCompra</td>
+                                    <td>@(p.Correo ?? "—")</td>
+                                    <td>@HoraGuatemala.Formatear(p.FechaInscripcionUtc)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    }
+</section>
+
+@code {
+    private ResumenGestion? resumen;
+
+    private IEnumerable<(string Titulo, string Clase, List<Participante> Grupo)> Grupos =>
+        resumen is null ? [] :
+        [
+            ("Asistirán", "etiqueta-si", Ordenar(resumen.Participantes.Where(p => p.Asistira))),
+            ("No asistirán", "etiqueta-no", Ordenar(resumen.Participantes.Where(p => !p.Asistira))),
+        ];
+
+    private static List<Participante> Ordenar(IEnumerable<Participante> participantes) =>
+        participantes.OrderBy(p => p.NombreNormalizado, StringComparer.Ordinal).ToList();
+
+    protected override async Task OnInitializedAsync() => resumen = await Servicio.ResumenAsync();
+}

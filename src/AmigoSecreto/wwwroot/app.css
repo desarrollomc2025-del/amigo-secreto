@@ -358,6 +358,21 @@ input.valid.modified { border-color: #7fb594; }
 .pareja-recibe strong { overflow-wrap: anywhere; }
 .pareja-recibe small { display: block; color: var(--texto-suave); }
 
+.tabla-desplazable { overflow-x: auto; margin-bottom: 1rem; }
+.tabla-reporte { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.tabla-reporte th, .tabla-reporte td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--borde); vertical-align: top; }
+.tabla-reporte th { background: var(--crema); font-weight: 700; color: var(--texto-suave); white-space: nowrap; }
+.tabla-reporte tbody tr:nth-child(even) { background: #fffaf0; }
+.tabla-reporte td:first-child { color: var(--texto-suave); width: 2rem; }
+.reporte h2 small { font-size: .9rem; color: var(--texto-suave); font-weight: 600; }
+
+@media print {
+    .nieve, .encabezado, .pie, .no-imprimir { display: none !important; }
+    body { background: #fff !important; }
+    .tarjeta { box-shadow: none !important; border: 0 !important; padding: 0 !important; }
+    .tabla-reporte tr { break-inside: avoid; }
+}
+
 code { background: #f6efe6; padding: .1rem .35rem; border-radius: 6px; }
 
 /* ----- Pantallas más grandes ----- */

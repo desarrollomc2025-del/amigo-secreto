@@ -35,6 +35,8 @@
 
         if (objetivo.closest('[data-forget-code]')) { almacen.borrar(); return; }
 
+        if (objetivo.closest('[data-print]')) { window.print(); return; }
+
         const regalo = objetivo.closest('[data-gift]');
         if (regalo) abrirRegalo(regalo);
     });
