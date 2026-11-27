@@ -1,0 +1,90 @@
+@page "/admin/empresas/{Id:int}"
+@attribute [Authorize(Roles = Politicas.Administrador)]
+@inject EmpresasService Empresas
+@inject NavigationManager Navegacion
+
+<PageTitle>Editar empresa · Amigo secreto</PageTitle>
+
+@if (empresa is null)
+{
+    return;
+}
+<section class="tarjeta">
+    <div class="titulo-con-accion">
+        <h1>✏️ @empresa.Nombre</h1>
+        <a href="admin" class="btn btn-enlace">← Empresas</a>
+    </div>
+    <p class="ayuda">Dirección: <code>@Navegacion.ToAbsoluteUri(empresa.Slug)</code> (no cambia, para no romper los enlaces compartidos).</p>
+
+    @if (exito is not null)
+    {
+        <div class="aviso aviso-exito" role="status">@exito</div>
+    }
+    @if (error is not null)
+    {
+        <div class="aviso aviso-error" role="alert">@error</div>
+    }
+
+    <EditForm Model="Form" FormName="editar-empresa" OnValidSubmit="GuardarAsync" class="formulario">
+        <DataAnnotationsValidator />
+        <CamposEmpresa Form="Form" Creando="false" />
+        <button type="submit" class="btn btn-primario btn-bloque">💾 Guardar cambios</button>
+    </EditForm>
+</section>
+
+<section class="tarjeta">
+    <h2>Eliminar empresa</h2>
+    <p class="ayuda">Solo se puede eliminar si no tiene inscritos. Para vaciarla usa «Limpiar todo» en su <a href="@EmpresaActual.Ruta(empresa, "gestion")">panel</a>.</p>
+    <form method="post" @formname="eliminar-empresa" @onsubmit="EliminarAsync">
+        <AntiforgeryToken />
+        <button type="submit" class="btn btn-peligro"
+                data-confirm="¿Eliminar la empresa «@empresa.Nombre»? Esta acción no se puede deshacer.">
+            🗑️ Eliminar empresa
+        </button>
+    </form>
+</section>
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    [SupplyParameterFromForm(FormName = "editar-empresa")]
+    private EmpresaForm? Form { get; set; }
+
+    private Empresa? empresa;
+    private string? exito;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        empresa = await Empresas.ObtenerAsync(Id);
+        if (empresa is null)
+        {
+            Navegacion.NotFound();
+            return;
+        }
+        Form ??= EmpresaForm.Desde(empresa);
+    }
+
+    private async Task GuardarAsync()
+    {
+        if (empresa is null) return;
+        var r = await Empresas.ActualizarAsync(Id, Form!);
+        if (!r.Ok)
+        {
+            error = r.Error;
+            return;
+        }
+        exito = string.IsNullOrEmpty(Form!.Clave) ? "Cambios guardados." : "Cambios guardados. La clave del organizador cambió.";
+        empresa = await Empresas.ObtenerAsync(Id);
+        Form = EmpresaForm.Desde(empresa!);
+    }
+
+    private async Task EliminarAsync()
+    {
+        if (empresa is null) return;
+        var r = await Empresas.EliminarAsync(Id);
+        if (r.Ok) Navegacion.NavigateTo("admin?m=eliminada");
+        else error = r.Error;
+    }
+}

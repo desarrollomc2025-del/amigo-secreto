@@ -16,7 +16,7 @@ public sealed record VistaParticipante(Participante Participante, bool SorteoRea
 public sealed record Pareja(Participante Da, Participante Recibe);
 
 public sealed record ResumenGestion(
-    EstadoSorteo Estado,
+    Empresa Empresa,
     IReadOnlyList<Participante> Participantes,
     int TotalAsignaciones)
 {
@@ -35,16 +35,7 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
 
     // ---------- Participantes ----------
 
-    public async Task<bool> SorteoRealizadoAsync()
-    {
-        await inicializador.EsperarAsync();
-        return await db.EstadosSorteo.AsNoTracking()
-            .Where(e => e.Id == EstadoSorteo.IdUnico)
-            .Select(e => e.Realizado)
-            .SingleAsync();
-    }
-
-    public async Task<Resultado> InscribirAsync(ParticipanteForm form)
+    public async Task<Resultado> InscribirAsync(int empresaId, ParticipanteForm form)
     {
         await inicializador.EsperarAsync();
         var nombre = Texto.Limpiar(form.NombreCompleto);
@@ -54,10 +45,10 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
         {
             return await EnTransaccionAsync(async () =>
             {
-                if (await EstadoAsync() is { Realizado: true })
+                if (await EmpresaAsync(empresaId) is { SorteoRealizado: true })
                     return Resultado.Falla("Las inscripciones están cerradas porque el sorteo ya se realizó.");
 
-                if (await db.Participantes.AnyAsync(p => p.NombreNormalizado == normalizado))
+                if (await db.Participantes.AnyAsync(p => p.EmpresaId == empresaId && p.NombreNormalizado == normalizado))
                     return Resultado.Falla(NombreDuplicado);
 
                 string codigo;
@@ -66,6 +57,7 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
 
                 db.Participantes.Add(new Participante
                 {
+                    EmpresaId = empresaId,
                     NombreCompleto = nombre,
                     NombreNormalizado = normalizado,
                     Postre = Texto.Limpiar(form.Postre),
@@ -85,13 +77,14 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
         }
     }
 
-    public async Task<VistaParticipante?> ConsultarAsync(string codigo)
+    public async Task<VistaParticipante?> ConsultarAsync(int empresaId, string codigo)
     {
         await inicializador.EsperarAsync();
-        var participante = await db.Participantes.AsNoTracking().SingleOrDefaultAsync(p => p.Codigo == codigo);
+        var participante = await db.Participantes.AsNoTracking()
+            .SingleOrDefaultAsync(p => p.EmpresaId == empresaId && p.Codigo == codigo);
         if (participante is null) return null;
 
-        var realizado = (await EstadoAsync(seguimiento: false)).Realizado;
+        var realizado = (await EmpresaAsync(empresaId, seguimiento: false)).SorteoRealizado;
         Participante? amigo = null;
         if (realizado && participante.Asistira)
         {
@@ -103,7 +96,7 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
         return new VistaParticipante(participante, realizado, amigo);
     }
 
-    public async Task<Resultado> ActualizarAsync(string codigo, ParticipanteForm form)
+    public async Task<Resultado> ActualizarAsync(int empresaId, string codigo, ParticipanteForm form)
     {
         await inicializador.EsperarAsync();
         var nombre = Texto.Limpiar(form.NombreCompleto);
@@ -113,14 +106,14 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
         {
             return await EnTransaccionAsync(async () =>
             {
-                if (await EstadoAsync() is { Realizado: true })
+                if (await EmpresaAsync(empresaId) is { SorteoRealizado: true })
                     return Resultado.Falla("El sorteo ya se realizó; tu inscripción ya no se puede modificar.");
 
-                var p = await db.Participantes.SingleOrDefaultAsync(x => x.Codigo == codigo);
+                var p = await db.Participantes.SingleOrDefaultAsync(x => x.EmpresaId == empresaId && x.Codigo == codigo);
                 if (p is null)
                     return Resultado.Falla("No encontramos una inscripción con ese código.");
 
-                if (await db.Participantes.AnyAsync(x => x.NombreNormalizado == normalizado && x.Id != p.Id))
+                if (await db.Participantes.AnyAsync(x => x.EmpresaId == empresaId && x.NombreNormalizado == normalizado && x.Id != p.Id))
                     return Resultado.Falla("Ya existe otra inscripción con ese nombre.");
 
                 p.NombreCompleto = nombre;
@@ -140,101 +133,105 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
         }
     }
 
-    // ---------- Gestión ----------
+    // ---------- Gestión (siempre dentro de una empresa) ----------
 
-    public async Task<ResumenGestion> ResumenAsync()
+    public async Task<ResumenGestion> ResumenAsync(int empresaId)
     {
         await inicializador.EsperarAsync();
-        var estado = await EstadoAsync(seguimiento: false);
+        var empresa = await EmpresaAsync(empresaId, seguimiento: false);
         var participantes = await db.Participantes.AsNoTracking()
+            .Where(p => p.EmpresaId == empresaId)
             .OrderBy(p => p.FechaInscripcionUtc)
             .ToListAsync();
         // Solo se cuenta: las parejas se ven aparte, en /gestion/parejas, para no revelarlas por accidente.
-        var asignaciones = await db.Asignaciones.CountAsync();
-        return new ResumenGestion(estado, participantes, asignaciones);
+        var asignaciones = await AsignacionesDe(empresaId).CountAsync();
+        return new ResumenGestion(empresa, participantes, asignaciones);
     }
 
     /// <param name="rehacer">false = primer sorteo; true = generar una nueva asignación.</param>
-    public async Task<Resultado> SortearAsync(bool rehacer)
+    public async Task<Resultado> SortearAsync(int empresaId, bool rehacer)
     {
         await inicializador.EsperarAsync();
         return await EnTransaccionAsync(async () =>
         {
-            var estado = await EstadoAsync();
-            if (!rehacer && estado.Realizado)
+            var empresa = await EmpresaAsync(empresaId);
+            if (!rehacer && empresa.SorteoRealizado)
                 return Resultado.Falla("El sorteo ya se realizó. Usa «Rehacer sorteo» si necesitas una nueva asignación.");
-            if (rehacer && !estado.Realizado)
+            if (rehacer && !empresa.SorteoRealizado)
                 return Resultado.Falla("Todavía no se ha realizado el sorteo.");
 
-            var ids = await db.Participantes.Where(p => p.Asistira).Select(p => p.Id).ToListAsync();
+            var ids = await db.Participantes.Where(p => p.EmpresaId == empresaId && p.Asistira)
+                .Select(p => p.Id).ToListAsync();
             if (ids.Count < MinimoParticipantes)
                 return Resultado.Falla($"Se necesitan al menos {MinimoParticipantes} personas que asistan (hay {ids.Count}).");
 
-            await db.Asignaciones.ExecuteDeleteAsync();
+            await AsignacionesDe(empresaId).ExecuteDeleteAsync();
             db.Asignaciones.AddRange(Sorteo.GenerarCiclo(ids)
                 .Select(x => new Asignacion { DaId = x.DaId, RecibeId = x.RecibeId }));
-            estado.Realizado = true;
-            estado.FechaSorteoUtc = DateTime.UtcNow;
+            empresa.SorteoRealizado = true;
+            empresa.FechaSorteoUtc = DateTime.UtcNow;
             await db.SaveChangesAsync();
 
-            logger.LogInformation("Sorteo {Tipo} con {Cantidad} participantes.", rehacer ? "rehecho" : "realizado", ids.Count);
+            logger.LogInformation("Sorteo {Tipo} en {Empresa} con {Cantidad} participantes.",
+                rehacer ? "rehecho" : "realizado", empresa.Slug, ids.Count);
             return Resultado.Exito();
         });
     }
 
-    public async Task<Resultado> ReiniciarAsync()
+    public async Task<Resultado> ReiniciarAsync(int empresaId)
     {
         await inicializador.EsperarAsync();
         return await EnTransaccionAsync(async () =>
         {
-            var estado = await EstadoAsync();
-            await db.Asignaciones.ExecuteDeleteAsync();
-            estado.Realizado = false;
-            estado.FechaSorteoUtc = null;
+            var empresa = await EmpresaAsync(empresaId);
+            await AsignacionesDe(empresaId).ExecuteDeleteAsync();
+            empresa.SorteoRealizado = false;
+            empresa.FechaSorteoUtc = null;
             await db.SaveChangesAsync();
-            logger.LogInformation("Sorteo reiniciado; inscripciones abiertas.");
+            logger.LogInformation("Sorteo reiniciado en {Empresa}; inscripciones abiertas.", empresa.Slug);
             return Resultado.Exito();
         });
     }
 
-    /// <summary>Borra todas las inscripciones y asignaciones y reabre las inscripciones (para un intercambio nuevo).</summary>
-    public async Task<Resultado> LimpiarTodoAsync()
+    /// <summary>Borra todas las inscripciones y asignaciones de la empresa y reabre las inscripciones.</summary>
+    public async Task<Resultado> LimpiarTodoAsync(int empresaId)
     {
         await inicializador.EsperarAsync();
         return await EnTransaccionAsync(async () =>
         {
-            var estado = await EstadoAsync();
-            await db.Asignaciones.ExecuteDeleteAsync();
-            var borrados = await db.Participantes.ExecuteDeleteAsync();
-            estado.Realizado = false;
-            estado.FechaSorteoUtc = null;
+            var empresa = await EmpresaAsync(empresaId);
+            await AsignacionesDe(empresaId).ExecuteDeleteAsync();
+            var borrados = await db.Participantes.Where(p => p.EmpresaId == empresaId).ExecuteDeleteAsync();
+            empresa.SorteoRealizado = false;
+            empresa.FechaSorteoUtc = null;
             await db.SaveChangesAsync();
-            logger.LogWarning("Datos limpiados: se borraron {Cantidad} inscripciones y todas las asignaciones.", borrados);
+            logger.LogWarning("Datos limpiados en {Empresa}: se borraron {Cantidad} inscripciones y todas las asignaciones.",
+                empresa.Slug, borrados);
             return Resultado.Exito();
         });
     }
 
-    public async Task<Resultado> EliminarAsync(int id)
+    public async Task<Resultado> EliminarAsync(int empresaId, int id)
     {
         await inicializador.EsperarAsync();
         return await EnTransaccionAsync(async () =>
         {
-            if (await EstadoAsync() is { Realizado: true })
+            if (await EmpresaAsync(empresaId) is { SorteoRealizado: true })
                 return Resultado.Falla("No se pueden eliminar inscripciones después del sorteo. Reinicia el sorteo primero.");
 
-            var borrados = await db.Participantes.Where(p => p.Id == id).ExecuteDeleteAsync();
+            var borrados = await db.Participantes.Where(p => p.EmpresaId == empresaId && p.Id == id).ExecuteDeleteAsync();
             return borrados > 0 ? Resultado.Exito() : Resultado.Falla("La inscripción ya no existe.");
         });
     }
 
     /// <summary>
     /// Parejas del sorteo (quién le regala a quién), ordenadas siguiendo la cadena para que se lean
-    /// como A → B → C → … Solo para la página protegida /gestion/parejas.
+    /// como A → B → C → … Solo para la página protegida /gestion/parejas y el envío por correo.
     /// </summary>
-    public async Task<IReadOnlyList<Pareja>> ParejasAsync()
+    public async Task<IReadOnlyList<Pareja>> ParejasAsync(int empresaId)
     {
         await inicializador.EsperarAsync();
-        var asignaciones = await db.Asignaciones.AsNoTracking()
+        var asignaciones = await AsignacionesDe(empresaId).AsNoTracking()
             .Select(a => new Pareja(a.Da!, a.Recibe!))
             .ToListAsync();
         if (asignaciones.Count == 0) return [];
@@ -255,19 +252,22 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
         return ordenadas;
     }
 
-    public async Task<Participante?> ObtenerParticipanteAsync(int id)
+    public async Task<Participante?> ObtenerParticipanteAsync(int empresaId, int id)
     {
         await inicializador.EsperarAsync();
-        return await db.Participantes.AsNoTracking().SingleOrDefaultAsync(p => p.Id == id);
+        return await db.Participantes.AsNoTracking().SingleOrDefaultAsync(p => p.EmpresaId == empresaId && p.Id == id);
     }
 
     // ---------- Auxiliares ----------
 
-    private Task<EstadoSorteo> EstadoAsync(bool seguimiento = true)
+    private Task<Empresa> EmpresaAsync(int empresaId, bool seguimiento = true)
     {
-        var consulta = seguimiento ? db.EstadosSorteo : db.EstadosSorteo.AsNoTracking();
-        return consulta.SingleAsync(e => e.Id == EstadoSorteo.IdUnico);
+        var consulta = seguimiento ? db.Empresas : db.Empresas.AsNoTracking();
+        return consulta.SingleAsync(e => e.Id == empresaId);
     }
+
+    private IQueryable<Asignacion> AsignacionesDe(int empresaId) =>
+        db.Asignaciones.Where(a => a.Da!.EmpresaId == empresaId);
 
     private Task<Resultado> EnTransaccionAsync(Func<Task<Resultado>> operacion)
     {
@@ -283,6 +283,6 @@ public sealed class IntercambioService(AppDbContext db, InicializadorBaseDatos i
         });
     }
 
-    private static bool EsViolacionUnica(DbUpdateException ex) =>
+    internal static bool EsViolacionUnica(DbUpdateException ex) =>
         ex.InnerException is SqlException { Number: 2601 or 2627 };
 }

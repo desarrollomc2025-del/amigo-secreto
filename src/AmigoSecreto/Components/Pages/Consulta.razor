@@ -1,8 +1,14 @@
 @page "/consulta"
+@page "/{EmpresaSlug}/consulta"
+@inherits PaginaEmpresa
 @inject IntercambioService Servicio
 
-<PageTitle>Mi inscripción · Red Cetino-Monteagudo-Rivera</PageTitle>
+<PageTitle>Mi inscripción · @NombreEmpresa</PageTitle>
 
+@if (Emp is null)
+{
+    return;
+}
 @if (vista is null)
 {
     <section class="tarjeta">
@@ -120,7 +126,7 @@ else
     }
 
     <div class="acciones acciones-centro">
-        <a class="btn btn-enlace" href="consulta" data-forget-code>Usar otro código</a>
+        <a class="btn btn-enlace" href="@Ruta("consulta")" data-forget-code>Usar otro código</a>
     </div>
 }
 
@@ -147,18 +153,20 @@ else
     protected override async Task OnInitializedAsync()
     {
         Busqueda ??= new BusquedaForm();
+        if (!await CargarEmpresaAsync()) return;
 
         // Envío del formulario de edición: hay que cargar la inscripción antes del manejador.
         if (Form is not null)
         {
             var codigo = CodigoPersonal.Normalizar(Form.Codigo);
-            vista = codigo is null ? null : await Servicio.ConsultarAsync(codigo);
+            vista = codigo is null ? null : await Servicio.ConsultarAsync(Emp!.Id, codigo);
             if (vista is null) error = "Tu sesión no es válida. Vuelve a ingresar tu código.";
         }
     }
 
     private async Task BuscarAsync()
     {
+        if (Emp is null) return;
         var codigo = CodigoPersonal.Normalizar(Busqueda.Codigo);
         if (codigo is null)
         {
@@ -166,7 +174,7 @@ else
             return;
         }
 
-        vista = await Servicio.ConsultarAsync(codigo);
+        vista = await Servicio.ConsultarAsync(Emp.Id, codigo);
         if (vista is null)
             error = "No encontramos una inscripción con ese código. Revisa que esté bien escrito.";
         else
@@ -175,11 +183,11 @@ else
 
     private async Task GuardarAsync()
     {
-        if (vista is null) return; // el código no era válido; ya se mostró el error
+        if (vista is null || Emp is null) return; // el código no era válido; ya se mostró el error
 
         var codigo = vista.Participante.Codigo;
-        var resultado = await Servicio.ActualizarAsync(codigo, Form!);
-        vista = await Servicio.ConsultarAsync(codigo);
+        var resultado = await Servicio.ActualizarAsync(Emp.Id, codigo, Form!);
+        vista = await Servicio.ConsultarAsync(Emp.Id, codigo);
 
         if (!resultado.Ok)
             error = resultado.Error;

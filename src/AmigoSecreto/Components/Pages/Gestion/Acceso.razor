@@ -1,21 +1,27 @@
 @page "/gestion/acceso"
-@inject ClaveAdministracion Clave
-@inject NavigationManager Navegacion
+@page "/{EmpresaSlug}/gestion/acceso"
+@inherits PaginaEmpresa
+@inject ClaveAdministracion ClaveGeneral
 
-<PageTitle>Acceso del organizador · Red Cetino-Monteagudo-Rivera</PageTitle>
+<PageTitle>Acceso del organizador · @NombreEmpresa</PageTitle>
 
+@if (Emp is null)
+{
+    return;
+}
 <section class="tarjeta tarjeta-angosta">
     <h1>🔐 Gestión del intercambio</h1>
 
-    @if (!Clave.Configurada)
+    @if (!ClaveGeneral.Configurada && Emp.ClaveHash is null)
     {
         <div class="aviso aviso-error" role="alert">
-            La gestión está deshabilitada: falta configurar <code>ADMIN_KEY</code> (mínimo @ClaveAdministracion.LongitudMinima caracteres).
+            La gestión está deshabilitada: esta empresa no tiene clave de organizador y falta configurar <code>ADMIN_KEY</code>
+            (mínimo @ClaveAdministracion.LongitudMinima caracteres).
         </div>
     }
     else
     {
-        <p class="lead">Ingresa la clave de administración.</p>
+        <p class="lead">Ingresa la clave del organizador de <strong>@Emp.Nombre</strong>.</p>
 
         @if (error is not null)
         {
@@ -35,9 +41,6 @@
 </section>
 
 @code {
-    [CascadingParameter]
-    private HttpContext HttpContext { get; set; } = default!;
-
     [SupplyParameterFromForm(FormName = "acceso")]
     private AccesoForm Form { get; set; } = default!;
 
@@ -47,31 +50,39 @@
     private string? error;
 
     // Solo se vuelve a páginas de gestión conocidas (evita redirecciones abiertas).
-    private string Destino => Volver?.TrimEnd('/').ToLowerInvariant() switch
+    private string Destino => Ruta(Volver?.Trim('/').ToLowerInvariant() switch
     {
-        "/gestion/parejas" => "gestion/parejas",
-        "/gestion/reporte" => "gestion/reporte",
+        "gestion/parejas" => "gestion/parejas",
+        "gestion/reporte" => "gestion/reporte",
         _ => "gestion",
-    };
+    });
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Form ??= new AccesoForm();
-        if (HttpMethods.IsGet(HttpContext.Request.Method) && HttpContext.User.IsInRole(Politicas.Organizador))
+        if (!await CargarEmpresaAsync()) return;
+        if (HttpMethods.IsGet(HttpContext.Request.Method) && Politicas.PuedeGestionar(HttpContext.User, Emp!.Id))
             Navegacion.NavigateTo(Destino);
     }
 
     private async Task EntrarAsync()
     {
-        if (!Clave.Verificar(Form.Clave))
+        if (Emp is null) return;
+
+        // ADMIN_KEY entra a cualquier empresa (y a /admin); la clave de la empresa, solo a esta.
+        List<Claim> claims;
+        if (ClaveGeneral.Verificar(Form.Clave))
+            claims = [new(ClaimTypes.Name, "Administrador"), new(ClaimTypes.Role, Politicas.Administrador)];
+        else if (HashClave.Verificar(Form.Clave, Emp.ClaveHash))
+            claims = [new(ClaimTypes.Name, "Organizador"), new(ClaimTypes.Role, Politicas.Organizador),
+                      new(Politicas.ClaimEmpresa, Emp.Id.ToString())];
+        else
         {
             error = "La clave no es correcta.";
             return;
         }
 
-        var identidad = new ClaimsIdentity(
-            [new Claim(ClaimTypes.Name, "Organizador"), new Claim(ClaimTypes.Role, Politicas.Organizador)],
-            CookieAuthenticationDefaults.AuthenticationScheme);
+        var identidad = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
         await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identidad));
         Navegacion.NavigateTo(Destino);
     }

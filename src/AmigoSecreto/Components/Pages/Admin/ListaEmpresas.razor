@@ -1,0 +1,133 @@
+@page "/admin"
+@attribute [Authorize(Roles = Politicas.Administrador)]
+@inject EmpresasService Empresas
+@inject NavigationManager Navegacion
+
+<PageTitle>Empresas · Amigo secreto</PageTitle>
+
+<section class="tarjeta">
+    <div class="titulo-con-accion">
+        <h1>🏢 Empresas</h1>
+        <button type="submit" form="frm-admin" name="Accion" value="salir" class="btn btn-enlace">Cerrar sesión</button>
+    </div>
+    <p class="lead">Cada empresa tiene su propia dirección, sus inscritos, su sorteo y su clave de organizador. No ven los datos de las demás.</p>
+
+    @if (MensajeRedireccion is not null)
+    {
+        <div class="aviso aviso-exito" role="status">@MensajeRedireccion</div>
+    }
+    @if (error is not null)
+    {
+        <div class="aviso aviso-error" role="alert">@error</div>
+    }
+
+    @if (lista is { Count: 0 })
+    {
+        <p class="ayuda">Todavía no hay empresas. Crea la primera abajo.</p>
+    }
+    else if (lista is not null)
+    {
+        <ul class="lista-participantes">
+            @foreach (var (e, inscritos) in lista)
+            {
+                <li>
+                    <div class="participante-info">
+                        <strong>@e.Nombre</strong>
+                        <small><code>@Navegacion.ToAbsoluteUri(e.Slug)</code></small>
+                        <span class="etiqueta @(e.SorteoRealizado ? "etiqueta-si" : "etiqueta-no")">
+                            @(e.SorteoRealizado ? "Sorteo realizado" : "Inscripciones abiertas")
+                        </span>
+                        <small>@inscritos inscritos@(e.Predeterminada ? " · ⭐ página principal" : "")</small>
+                    </div>
+                    <div class="participante-acciones">
+                        <a href="@EmpresaActual.Ruta(e, "gestion")" class="btn btn-chico btn-primario">Panel</a>
+                        <a href="admin/empresas/@e.Id" class="btn btn-chico btn-secundario">✏️ Editar</a>
+                        @if (!e.Predeterminada)
+                        {
+                            <button type="submit" form="frm-admin" name="Predeterminada" value="@e.Id" class="btn btn-chico btn-secundario"
+                                    data-confirm="¿Mostrar «@e.Nombre» en la página principal y en las direcciones sin empresa (/inscripcion, /consulta, /gestion)?">
+                                ⭐ Principal
+                            </button>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+<section class="tarjeta">
+    <h2>Nueva empresa</h2>
+    <EditForm Model="Form" FormName="crear-empresa" OnValidSubmit="CrearAsync" class="formulario">
+        <DataAnnotationsValidator />
+        <CamposEmpresa Form="Form" Creando="true" />
+        <button type="submit" class="btn btn-primario btn-bloque">➕ Crear empresa</button>
+    </EditForm>
+</section>
+
+<form id="frm-admin" method="post" @formname="admin" @onsubmit="AccionAsync"><AntiforgeryToken /></form>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "crear-empresa")]
+    private EmpresaForm Form { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "admin")]
+    private string? Accion { get; set; }
+
+    [SupplyParameterFromForm(FormName = "admin")]
+    private int? Predeterminada { get; set; }
+
+    [SupplyParameterFromQuery(Name = "creada")]
+    private string? Creada { get; set; }
+
+    [SupplyParameterFromQuery(Name = "m")]
+    private string? Mensaje { get; set; }
+
+    private IReadOnlyList<EmpresaResumen>? lista;
+    private string? error;
+
+    private string? MensajeRedireccion => !HttpMethods.IsGet(HttpContext.Request.Method) ? null
+        : Creada is not null ? $"🎉 Empresa creada. Comparte con sus participantes la dirección {Navegacion.ToAbsoluteUri(Creada)} y dale la clave a su organizador."
+        : Mensaje switch
+        {
+            "principal" => "⭐ Se cambió la empresa de la página principal.",
+            "eliminada" => "🗑️ Empresa eliminada.",
+            _ => null,
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Form ??= new EmpresaForm();
+        lista = await Empresas.ListarAsync();
+    }
+
+    private async Task CrearAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Form.Slug))
+            Form.Slug = Slug.Sugerir(Form.Nombre);
+
+        var r = await Empresas.CrearAsync(Form);
+        if (r.Ok)
+            Navegacion.NavigateTo($"admin?creada={Uri.EscapeDataString(r.Codigo!)}");
+        else
+            error = r.Error;
+    }
+
+    private async Task AccionAsync()
+    {
+        if (Accion == "salir")
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            Navegacion.NavigateTo("admin/acceso");
+        }
+        else if (Predeterminada is int id)
+        {
+            var r = await Empresas.HacerPredeterminadaAsync(id);
+            if (r.Ok) Navegacion.NavigateTo("admin?m=principal");
+            else error = r.Error;
+        }
+    }
+}

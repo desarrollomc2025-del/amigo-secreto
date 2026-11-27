@@ -1,4 +1,5 @@
 using System.Net;
+using AmigoSecreto.Data;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
@@ -13,7 +14,6 @@ public sealed class OpcionesCorreo
     public string? Usuario { get; set; }
     public string? Clave { get; set; }
     public string? Remitente { get; set; }
-    public string NombreRemitente { get; set; } = "Red Cetino-Monteagudo-Rivera";
 
     public bool Configurado => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(Remitente);
 }
@@ -24,7 +24,7 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
     public bool Configurado => opciones.Configurado;
 
     /// <summary>Devuelve true si el correo se entregó al servidor SMTP. Nunca lanza excepción.</summary>
-    public async Task<bool> EnviarCodigoAsync(string destinatario, string nombre, string codigo, string urlConsulta,
+    public async Task<bool> EnviarCodigoAsync(Empresa empresa, string destinatario, string nombre, string codigo, string urlConsulta,
         CancellationToken cancellationToken = default)
     {
         if (!opciones.Configurado)
@@ -34,9 +34,17 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
         }
 
         var mensaje = new MimeMessage();
-        mensaje.From.Add(new MailboxAddress(opciones.NombreRemitente, opciones.Remitente));
+        mensaje.From.Add(new MailboxAddress(empresa.Nombre, opciones.Remitente!));
         mensaje.To.Add(new MailboxAddress(nombre, destinatario));
-        mensaje.Subject = "Tu código del intercambio de postres 🎁";
+        mensaje.Subject = $"Tu código · {empresa.Subtitulo} 🎁";
+
+        var empresaHtml = WebUtility.HtmlEncode(empresa.Nombre);
+        var actividad = empresa.Subtitulo.ToLowerInvariant();
+        var actividadHtml = WebUtility.HtmlEncode(actividad);
+        var fechaTexto = empresa.FechaSorteo.Length > 0 ? $"📅 El sorteo del amigo secreto se hará {empresa.FechaSorteo}" : "";
+        var fechaHtml = empresa.FechaSorteo.Length > 0
+            ? $"""<p style="background:#eef7ee;border-left:4px solid #2e7d32;padding:10px 12px;border-radius:4px">📅 El sorteo del amigo secreto se hará <strong>{WebUtility.HtmlEncode(empresa.FechaSorteo)}</strong></p>"""
+            : "";
 
         var nombreHtml = WebUtility.HtmlEncode(nombre);
         var urlHtml = WebUtility.HtmlEncode(urlConsulta);
@@ -46,11 +54,11 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
                 $"""
                 Hola, {nombre}:
 
-                ¡Ya estás inscrito en el intercambio de postres de la Red Cetino-Monteagudo-Rivera!
+                ¡Ya estás inscrito en el {actividad} de {empresa.Nombre}!
 
                 Tu código personal es: {codigo}
 
-                📅 El sorteo del amigo secreto se hará {Evento.FechaSorteo}
+                {fechaTexto}
 
                 Con él puedes ver o editar tu inscripción y, después del sorteo, descubrir a tu amigo secreto:
                 {urlConsulta}
@@ -60,14 +68,13 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
             HtmlBody =
                 $"""
                 <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto;color:#222">
-                  <h2 style="color:#b3202b">🎁 Red Cetino-Monteagudo-Rivera</h2>
+                  <h2 style="color:#b3202b">🎁 {empresaHtml}</h2>
                   <p>Hola, <strong>{nombreHtml}</strong>:</p>
-                  <p>¡Ya estás inscrito en el <strong>intercambio de postres</strong>!</p>
+                  <p>¡Ya estás inscrito en el <strong>{actividadHtml}</strong>!</p>
                   <p>Tu código personal es:</p>
                   <p style="font-size:32px;font-weight:bold;letter-spacing:6px;text-align:center;background:#fff4d6;
                             border:2px dashed #d4a017;border-radius:8px;padding:12px">{codigo}</p>
-                  <p style="background:#eef7ee;border-left:4px solid #2e7d32;padding:10px 12px;border-radius:4px">
-                    📅 El sorteo del amigo secreto se hará <strong>{Evento.FechaSorteo}</strong></p>
+                  {fechaHtml}
                   <p>Con él puedes ver o editar tu inscripción y, después del sorteo, descubrir a tu amigo secreto.</p>
                   <p style="text-align:center"><a href="{urlHtml}" style="background:#b3202b;color:#fff;padding:10px 18px;
                      border-radius:6px;text-decoration:none">Ver mi inscripción</a></p>
@@ -96,7 +103,7 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
     /// Envía a cada participante (quien da) el nombre de su amigo secreto, el postre y dónde comprarlo.
     /// Usa una sola conexión SMTP y se reconecta si se cae. Nunca lanza excepción por un correo fallido.
     /// </summary>
-    public async Task<ResultadoEnvioMasivo> EnviarAmigosSecretosAsync(IReadOnlyList<Pareja> parejas, string urlConsulta,
+    public async Task<ResultadoEnvioMasivo> EnviarAmigosSecretosAsync(Empresa empresa, IReadOnlyList<Pareja> parejas, string urlConsulta,
         CancellationToken cancellationToken = default)
     {
         var sinCorreo = parejas.Where(p => string.IsNullOrWhiteSpace(p.Da.Correo))
@@ -117,7 +124,7 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
             {
                 if (!cliente.IsConnected)
                     await ConectarAsync(cliente, cancellationToken);
-                await cliente.SendAsync(new MailKit.SendRequest(MensajeAmigoSecreto(pareja, urlConsulta)), cancellationToken);
+                await cliente.SendAsync(new MailKit.SendRequest(MensajeAmigoSecreto(empresa, pareja, urlConsulta)), cancellationToken);
                 enviados++;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -134,12 +141,12 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
         return new ResultadoEnvioMasivo(enviados, sinCorreo, fallidos, Configurado: true);
     }
 
-    private MimeMessage MensajeAmigoSecreto(Pareja pareja, string urlConsulta)
+    private MimeMessage MensajeAmigoSecreto(Empresa empresa, Pareja pareja, string urlConsulta)
     {
         var da = pareja.Da;
         var amigo = pareja.Recibe;
         var mensaje = new MimeMessage();
-        mensaje.From.Add(new MailboxAddress(opciones.NombreRemitente, opciones.Remitente));
+        mensaje.From.Add(new MailboxAddress(empresa.Nombre, opciones.Remitente!));
         mensaje.To.Add(new MailboxAddress(da.NombreCompleto, da.Correo!));
         mensaje.Subject = "🎁 ¡Ya tienes a tu amigo secreto!";
 
@@ -150,7 +157,7 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
                 $"""
                 Hola, {da.NombreCompleto}:
 
-                ¡Ya se realizó el sorteo del intercambio de postres de la Red Cetino-Monteagudo-Rivera!
+                ¡Ya se realizó el sorteo del {empresa.Subtitulo.ToLowerInvariant()} de {empresa.Nombre}!
 
                 Tu amigo secreto es: {amigo.NombreCompleto}
 
@@ -165,9 +172,9 @@ public sealed class EnviadorCorreo(OpcionesCorreo opciones, ILogger<EnviadorCorr
             HtmlBody =
                 $"""
                 <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:auto;color:#222">
-                  <h2 style="color:#b3202b">🎁 Red Cetino-Monteagudo-Rivera</h2>
+                  <h2 style="color:#b3202b">🎁 {h(empresa.Nombre)}</h2>
                   <p>Hola, <strong>{h(da.NombreCompleto)}</strong>:</p>
-                  <p>¡Ya se realizó el sorteo del <strong>intercambio de postres</strong>!</p>
+                  <p>¡Ya se realizó el sorteo del <strong>{h(empresa.Subtitulo.ToLowerInvariant())}</strong>!</p>
                   <p style="text-align:center;margin:18px 0 4px;color:#777;text-transform:uppercase;letter-spacing:2px;font-size:13px">
                     Tu amigo secreto es…</p>
                   <p style="font-size:28px;font-weight:bold;text-align:center;color:#b3202b;margin:0 0 16px">{h(amigo.NombreCompleto)}</p>

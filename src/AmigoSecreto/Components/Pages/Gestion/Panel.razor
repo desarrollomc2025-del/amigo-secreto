@@ -1,15 +1,27 @@
 @page "/gestion"
-@attribute [Authorize(Policy = Politicas.Organizador)]
+@page "/{EmpresaSlug}/gestion"
+@inherits PaginaEmpresa
+@attribute [Authorize(Roles = Politicas.RolesGestion)]
 @inject IntercambioService Servicio
-@inject NavigationManager Navegacion
 @inject EnviadorCorreo Enviador
 
-<PageTitle>Gestión · Red Cetino-Monteagudo-Rivera</PageTitle>
+<PageTitle>Gestión · @NombreEmpresa</PageTitle>
+
+@if (Emp is null || resumen is null)
+{
+    return;
+}
 
 <section class="tarjeta">
     <div class="titulo-con-accion">
         <h1>Panel del organizador</h1>
-        <button type="submit" form="frm-acciones" name="Accion" value="salir" class="btn btn-enlace">Cerrar sesión</button>
+        <div class="participante-acciones">
+            @if (Politicas.EsAdministrador(HttpContext.User))
+            {
+                <a href="admin" class="btn btn-enlace">🏢 Empresas</a>
+            }
+            <button type="submit" form="frm-acciones" name="Accion" value="salir" class="btn btn-enlace">Cerrar sesión</button>
+        </div>
     </div>
 
     @if (MensajeRedireccion is not null)
@@ -41,10 +53,10 @@
             <div class="estadistica"><span class="numero">@resumen.NoAsistentes</span><span>No asistirán</span></div>
         </div>
 
-        <div class="estado-sorteo @(resumen.Estado.Realizado ? "realizado" : "")">
-            @if (resumen.Estado.Realizado)
+        <div class="estado-sorteo @(resumen.Empresa.SorteoRealizado ? "realizado" : "")">
+            @if (resumen.Empresa.SorteoRealizado)
             {
-                <p>✅ <strong>Sorteo realizado</strong> el @HoraGuatemala.Formatear(resumen.Estado.FechaSorteoUtc!.Value) con @resumen.TotalAsignaciones participantes. Las inscripciones están cerradas.</p>
+                <p>✅ <strong>Sorteo realizado</strong> el @HoraGuatemala.Formatear(resumen.Empresa.FechaSorteoUtc!.Value) con @resumen.TotalAsignaciones participantes. Las inscripciones están cerradas.</p>
             }
             else
             {
@@ -53,7 +65,7 @@
         </div>
 
         <div class="acciones">
-            @if (!resumen.Estado.Realizado)
+            @if (!resumen.Empresa.SorteoRealizado)
             {
                 <button type="submit" form="frm-acciones" name="Accion" value="sortear" class="btn btn-primario btn-grande"
                         data-confirm="¿Realizar el sorteo con las @resumen.Asistentes personas que asistirán? Se cerrarán las inscripciones.">
@@ -62,7 +74,7 @@
             }
             else
             {
-                <a href="gestion/parejas" class="btn btn-primario">🔒 Ver parejas</a>
+                <a href="@Ruta("gestion/parejas")" class="btn btn-primario">🔒 Ver parejas</a>
                 <button type="submit" form="frm-acciones" name="Accion" value="enviar-correos" class="btn btn-secundario"
                         data-confirm="¿Enviar por correo a cada participante el nombre de su amigo secreto, el postre y dónde comprarlo? Si ya lo enviaste antes, lo recibirán otra vez.">
                     📧 Enviar amigo secreto por correo
@@ -94,7 +106,7 @@
             <h2>Participantes</h2>
             @if (resumen.Participantes.Count > 0)
             {
-                <a href="gestion/reporte" class="btn btn-chico btn-secundario">📋 Reporte de asistencia</a>
+                <a href="@Ruta("gestion/reporte")" class="btn btn-chico btn-secundario">📋 Reporte de asistencia</a>
             }
         </div>
         @if (resumen.Participantes.Count == 0)
@@ -118,7 +130,7 @@
                                     data-confirm="¿Mostrar el código de @p.NombreCompleto? Con ese código se puede ver su asignación del sorteo.">
                                 🔑 Código
                             </button>
-                            @if (!resumen.Estado.Realizado)
+                            @if (!resumen.Empresa.SorteoRealizado)
                             {
                                 <button type="submit" form="frm-participante" name="Eliminar" value="@p.Id" class="btn btn-chico btn-peligro"
                                         data-confirm="¿Eliminar la inscripción de @p.NombreCompleto? Esta acción no se puede deshacer.">
@@ -138,9 +150,6 @@
 <form id="frm-participante" method="post" @formname="participante" @onsubmit="ParticipanteAsync"><AntiforgeryToken /></form>
 
 @code {
-    [CascadingParameter]
-    private HttpContext HttpContext { get; set; } = default!;
-
     [SupplyParameterFromQuery(Name = "m")]
     private string? Mensaje { get; set; }
 
@@ -169,28 +178,33 @@
         }
         : null;
 
-    protected override async Task OnInitializedAsync() => resumen = await Servicio.ResumenAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (await CargarGestionAsync("gestion"))
+            resumen = await Servicio.ResumenAsync(Emp!.Id);
+    }
 
     private async Task AccionAsync()
     {
+        if (Emp is null || resumen is null) return; // sin acceso a esta empresa
         // Las acciones que cambian el sorteo redirigen (PRG) para que recargar la página no las repita.
         switch (Accion)
         {
             case "salir":
                 await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-                Navegacion.NavigateTo("gestion/acceso");
+                Navegacion.NavigateTo(Ruta("gestion/acceso"));
                 return;
             case "sortear":
-                await AplicarAsync(Servicio.SortearAsync(rehacer: false), "sorteado");
+                await AplicarAsync(Servicio.SortearAsync(Emp!.Id, rehacer: false), "sorteado");
                 return;
             case "rehacer":
-                await AplicarAsync(Servicio.SortearAsync(rehacer: true), "rehecho");
+                await AplicarAsync(Servicio.SortearAsync(Emp!.Id, rehacer: true), "rehecho");
                 return;
             case "reiniciar":
-                await AplicarAsync(Servicio.ReiniciarAsync(), "reiniciado");
+                await AplicarAsync(Servicio.ReiniciarAsync(Emp!.Id), "reiniciado");
                 return;
             case "limpiar":
-                await AplicarAsync(Servicio.LimpiarTodoAsync(), "limpiado");
+                await AplicarAsync(Servicio.LimpiarTodoAsync(Emp!.Id), "limpiado");
                 return;
             case "enviar-correos":
                 await EnviarCorreosAsync();
@@ -203,14 +217,14 @@
 
     private async Task EnviarCorreosAsync()
     {
-        var parejas = await Servicio.ParejasAsync();
+        var parejas = await Servicio.ParejasAsync(Emp!.Id);
         if (parejas.Count == 0)
         {
             error = "Todavía no se ha realizado el sorteo.";
             return;
         }
 
-        var r = await Enviador.EnviarAmigosSecretosAsync(parejas, Navegacion.ToAbsoluteUri("consulta").ToString(),
+        var r = await Enviador.EnviarAmigosSecretosAsync(Emp!, parejas, Navegacion.ToAbsoluteUri(Ruta("consulta")).ToString(),
             HttpContext.RequestAborted);
         if (!r.Configurado)
         {
@@ -229,23 +243,24 @@
     {
         var resultado = await operacion;
         if (resultado.Ok)
-            Navegacion.NavigateTo($"gestion?m={mensaje}");
+            Navegacion.NavigateTo($"{Ruta("gestion")}?m={mensaje}");
         else
             error = resultado.Error;
     }
 
     private async Task ParticipanteAsync()
     {
+        if (Emp is null || resumen is null) return; // sin acceso a esta empresa
         if (Eliminar is int idEliminar)
         {
-            var resultado = await Servicio.EliminarAsync(idEliminar);
+            var resultado = await Servicio.EliminarAsync(Emp!.Id, idEliminar);
             if (resultado.Ok) exito = "Inscripción eliminada.";
             else error = resultado.Error;
-            resumen = await Servicio.ResumenAsync();
+            resumen = await Servicio.ResumenAsync(Emp!.Id);
         }
         else if (Recuperar is int idRecuperar)
         {
-            var p = await Servicio.ObtenerParticipanteAsync(idRecuperar);
+            var p = await Servicio.ObtenerParticipanteAsync(Emp!.Id, idRecuperar);
             if (p is null) error = "La inscripción ya no existe.";
             else codigoRecuperado = (p.NombreCompleto, p.Codigo);
         }

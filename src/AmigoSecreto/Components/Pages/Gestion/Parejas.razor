@@ -1,13 +1,20 @@
 @page "/gestion/parejas"
-@attribute [Authorize(Policy = Politicas.Organizador)]
+@page "/{EmpresaSlug}/gestion/parejas"
+@inherits PaginaEmpresa
+@attribute [Authorize(Roles = Politicas.RolesGestion)]
 @inject IntercambioService Servicio
 
-<PageTitle>Parejas del sorteo · Red Cetino-Monteagudo-Rivera</PageTitle>
+<PageTitle>Parejas del sorteo · @NombreEmpresa</PageTitle>
+
+@if (Emp is null)
+{
+    return;
+}
 
 <section class="tarjeta">
     <div class="titulo-con-accion">
         <h1>🔒 Parejas del sorteo</h1>
-        <a href="gestion" class="btn btn-enlace">← Volver al panel</a>
+        <a href="@Ruta("gestion")" class="btn btn-enlace">← Volver al panel</a>
     </div>
 
     @if (parejas is null)
@@ -50,5 +57,9 @@
 @code {
     private IReadOnlyList<Pareja>? parejas;
 
-    protected override async Task OnInitializedAsync() => parejas = await Servicio.ParejasAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (await CargarGestionAsync("gestion/parejas"))
+            parejas = await Servicio.ParejasAsync(Emp!.Id);
+    }
 }

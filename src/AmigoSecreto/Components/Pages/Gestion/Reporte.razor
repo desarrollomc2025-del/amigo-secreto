@@ -1,15 +1,22 @@
 @page "/gestion/reporte"
-@attribute [Authorize(Policy = Politicas.Organizador)]
+@page "/{EmpresaSlug}/gestion/reporte"
+@inherits PaginaEmpresa
+@attribute [Authorize(Roles = Politicas.RolesGestion)]
 @inject IntercambioService Servicio
 
-<PageTitle>Reporte de asistencia · Red Cetino-Monteagudo-Rivera</PageTitle>
+<PageTitle>Reporte de asistencia · @NombreEmpresa</PageTitle>
+
+@if (Emp is null)
+{
+    return;
+}
 
 <section class="tarjeta reporte">
     <div class="titulo-con-accion">
-        <h1>📋 Reporte de asistencia</h1>
+        <h1>📋 Reporte de asistencia · @Emp.Nombre</h1>
         <div class="participante-acciones no-imprimir">
             <button type="button" class="btn btn-chico btn-secundario" data-print>🖨️ Imprimir / PDF</button>
-            <a href="gestion" class="btn btn-enlace">← Volver al panel</a>
+            <a href="@Ruta("gestion")" class="btn btn-enlace">← Volver al panel</a>
         </div>
     </div>
 
@@ -86,5 +93,9 @@
     private static List<Participante> Ordenar(IEnumerable<Participante> participantes) =>
         participantes.OrderBy(p => p.NombreNormalizado, StringComparer.Ordinal).ToList();
 
-    protected override async Task OnInitializedAsync() => resumen = await Servicio.ResumenAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (await CargarGestionAsync("gestion/reporte"))
+            resumen = await Servicio.ResumenAsync(Emp!.Id);
+    }
 }

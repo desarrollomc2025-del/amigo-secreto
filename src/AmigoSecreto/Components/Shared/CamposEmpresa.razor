@@ -1,0 +1,52 @@
+@* Igual que CamposParticipante: el parámetro se llama "Form" para que los nombres de los campos HTML
+   (Form.Nombre, ...) coincidan con la propiedad [SupplyParameterFromForm] "Form" de la página. *@
+
+<div class="campo">
+    <label for="emp-nombre">Nombre de la empresa <span class="obligatorio" aria-hidden="true">*</span></label>
+    <InputText id="emp-nombre" @bind-Value="Form.Nombre" required minlength="2" maxlength="100" placeholder="Ej.: Distribuidora La Esperanza" />
+    <ValidationMessage For="() => Form.Nombre" class="error-campo" />
+</div>
+
+@if (Creando)
+{
+    <div class="campo">
+        <label for="emp-slug">Dirección (opcional)</label>
+        <InputText id="emp-slug" @bind-Value="Form.Slug" maxlength="40" spellcheck="false" autocapitalize="none"
+                   pattern="[a-z0-9]([a-z0-9\-]*[a-z0-9])?" placeholder="Ej.: la-esperanza"
+                   title="Minúsculas sin tildes, números y guiones." />
+        <p class="ayuda">Queda como <code>tu-dominio/<strong>direccion</strong></code>. Si la dejas vacía se crea a partir del nombre. No se puede cambiar después.</p>
+        <ValidationMessage For="() => Form.Slug" class="error-campo" />
+    </div>
+}
+
+<div class="campo">
+    <label for="emp-subtitulo">Subtítulo <span class="obligatorio" aria-hidden="true">*</span></label>
+    <InputText id="emp-subtitulo" @bind-Value="Form.Subtitulo" required maxlength="100" placeholder="Ej.: Intercambio de postres" />
+    <ValidationMessage For="() => Form.Subtitulo" class="error-campo" />
+</div>
+
+<div class="campo">
+    <label for="emp-fecha">¿Cuándo será el sorteo?</label>
+    <InputText id="emp-fecha" @bind-Value="Form.FechaSorteo" maxlength="150" placeholder="Ej.: el viernes 18 de diciembre a las 6:00 p. m." />
+    <p class="ayuda">Se muestra en la portada y en el correo con el código. Puede quedar vacío.</p>
+    <ValidationMessage For="() => Form.FechaSorteo" class="error-campo" />
+</div>
+
+<div class="campo">
+    <label for="emp-clave">@(Creando ? "Clave del organizador" : "Nueva clave del organizador") @if (Creando) {<span class="obligatorio" aria-hidden="true">*</span>}</label>
+    <InputText id="emp-clave" type="password" @bind-Value="Form.Clave" autocomplete="new-password"
+               required="@Creando" minlength="@HashClave.LongitudMinima" maxlength="200" />
+    <p class="ayuda">
+        @(Creando ? "Con ella el organizador entra a " : "Déjala vacía para no cambiarla. Con ella el organizador entra a ")
+        <code>/direccion/gestion</code>. Mínimo @HashClave.LongitudMinima caracteres. La clave general (ADMIN_KEY) también funciona.
+    </p>
+    <ValidationMessage For="() => Form.Clave" class="error-campo" />
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public EmpresaForm Form { get; set; } = default!;
+
+    [Parameter]
+    public bool Creando { get; set; }
+}

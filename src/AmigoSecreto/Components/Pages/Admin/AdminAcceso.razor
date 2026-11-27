@@ -1,0 +1,76 @@
+@page "/admin/acceso"
+@inject ClaveAdministracion Clave
+@inject NavigationManager Navegacion
+
+<PageTitle>Administración · Amigo secreto</PageTitle>
+
+<section class="tarjeta tarjeta-angosta">
+    <h1>🏢 Administración de empresas</h1>
+
+    @if (!Clave.Configurada)
+    {
+        <div class="aviso aviso-error" role="alert">
+            La administración está deshabilitada: falta configurar <code>ADMIN_KEY</code> (mínimo @ClaveAdministracion.LongitudMinima caracteres).
+        </div>
+    }
+    else
+    {
+        <p class="lead">Ingresa la clave general de administración (<code>ADMIN_KEY</code>).</p>
+
+        @if (error is not null)
+        {
+            <div class="aviso aviso-error" role="alert">@error</div>
+        }
+
+        <EditForm Model="Form" FormName="acceso-admin" OnValidSubmit="EntrarAsync" class="formulario">
+            <DataAnnotationsValidator />
+            <div class="campo">
+                <label for="clave">Clave</label>
+                <InputText id="clave" type="password" @bind-Value="Form.Clave" required autocomplete="current-password" />
+                <ValidationMessage For="() => Form.Clave" class="error-campo" />
+            </div>
+            <button type="submit" class="btn btn-primario btn-bloque">Entrar</button>
+        </EditForm>
+    }
+</section>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    [SupplyParameterFromForm(FormName = "acceso-admin")]
+    private AccesoForm Form { get; set; } = default!;
+
+    /// <summary>Lo pone el middleware de cookies al pedir una página protegida sin haber entrado.</summary>
+    [SupplyParameterFromQuery(Name = "volver")]
+    private string? Volver { get; set; }
+
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        Form ??= new AccesoForm();
+        if (!HttpMethods.IsGet(HttpContext.Request.Method)) return;
+
+        // Quien venía de la gestión de una empresa entra con la clave de esa empresa, en su propia página de acceso.
+        if (AccesoEmpresa.Desde(Volver) is { } destino)
+            Navegacion.NavigateTo(destino);
+        else if (Politicas.EsAdministrador(HttpContext.User))
+            Navegacion.NavigateTo("admin");
+    }
+
+    private async Task EntrarAsync()
+    {
+        if (!Clave.Verificar(Form.Clave))
+        {
+            error = "La clave no es correcta.";
+            return;
+        }
+
+        var identidad = new ClaimsIdentity(
+            [new Claim(ClaimTypes.Name, "Administrador"), new Claim(ClaimTypes.Role, Politicas.Administrador)],
+            CookieAuthenticationDefaults.AuthenticationScheme);
+        await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identidad));
+        Navegacion.NavigateTo("admin");
+    }
+}

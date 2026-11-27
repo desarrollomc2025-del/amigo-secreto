@@ -95,8 +95,72 @@ public static partial class Correo
     }
 }
 
-/// <summary>Datos del evento que se muestran en la página y en el correo.</summary>
-public static class Evento
+
+/// <summary>Identificador de empresa en la URL: /{slug}/inscripcion.</summary>
+public static partial class Slug
 {
-    public const string FechaSorteo = "el sábado 21 de noviembre a las 9:00 p. m.";
+    public const int LongitudMaxima = 40;
+
+    // Minúsculas, números y guiones; sin guion al inicio ni al final. Sin puntos: no choca con archivos (app.css).
+    [GeneratedRegex(@"^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$")]
+    private static partial Regex Formato();
+
+    /// <summary>Primeros segmentos de rutas de la app: una empresa no puede llamarse así.</summary>
+    public static readonly IReadOnlySet<string> Reservados = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "admin", "gestion", "consulta", "inscripcion", "estado", "error", "not-found", "e", "api",
+    };
+
+    public static bool EsValido(string? valor) =>
+        valor is not null && Formato().IsMatch(valor) && !valor.Contains("--") && !Reservados.Contains(valor);
+
+    /// <summary>Sugerencia a partir del nombre: "Café Ñandú S.A." → "cafe-nandu-s-a".</summary>
+    public static string Sugerir(string? nombre)
+    {
+        var sb = new StringBuilder();
+        foreach (var c in Texto.NormalizarNombre(nombre).ToLowerInvariant())
+        {
+            if (char.IsAsciiLetterOrDigit(c)) sb.Append(c);
+            else if (sb.Length > 0 && sb[^1] != '-') sb.Append('-');
+        }
+        var slug = sb.ToString().Trim('-');
+        if (slug.Length > LongitudMaxima) slug = slug[..LongitudMaxima].TrimEnd('-');
+        return slug;
+    }
+}
+
+/// <summary>Hash de las claves de organizador de cada empresa (PBKDF2-SHA256 con sal).</summary>
+public static class HashClave
+{
+    public const int LongitudMinima = 10;
+    private const int Iteraciones = 100_000;
+    private const int LongitudSal = 16;
+    private const int LongitudHash = 32;
+
+    /// <summary>Formato: pbkdf2-sha256$iteraciones$sal(base64)$hash(base64).</summary>
+    public static string Crear(string clave)
+    {
+        var sal = RandomNumberGenerator.GetBytes(LongitudSal);
+        var hash = Rfc2898DeriveBytes.Pbkdf2(clave, sal, Iteraciones, HashAlgorithmName.SHA256, LongitudHash);
+        return $"pbkdf2-sha256${Iteraciones}${Convert.ToBase64String(sal)}${Convert.ToBase64String(hash)}";
+    }
+
+    public static bool Verificar(string? clave, string? almacenado)
+    {
+        if (string.IsNullOrEmpty(clave) || string.IsNullOrEmpty(almacenado)) return false;
+        var partes = almacenado.Split('$');
+        if (partes is not ["pbkdf2-sha256", var iter, var salB64, var hashB64] || !int.TryParse(iter, out var iteraciones))
+            return false;
+        try
+        {
+            var esperado = Convert.FromBase64String(hashB64);
+            var calculado = Rfc2898DeriveBytes.Pbkdf2(clave, Convert.FromBase64String(salB64), iteraciones,
+                HashAlgorithmName.SHA256, esperado.Length);
+            return CryptographicOperations.FixedTimeEquals(calculado, esperado);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 }

@@ -26,7 +26,10 @@ builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(csb.ConnectionSt
 
 builder.Services.AddSingleton<InicializadorBaseDatos>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<InicializadorBaseDatos>());
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<EmpresaActual>();
 builder.Services.AddScoped<IntercambioService>();
+builder.Services.AddScoped<EmpresasService>();
 builder.Services.AddSingleton<ClaveAdministracion>();
 builder.Services.AddSingleton(builder.Configuration.GetSection("Correo").Get<OpcionesCorreo>() ?? new OpcionesCorreo());
 builder.Services.AddSingleton<EnviadorCorreo>();
@@ -52,14 +55,14 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         o.Cookie.HttpOnly = true;
         o.Cookie.SecurePolicy = CookieSecurePolicy.Always;
         o.Cookie.SameSite = SameSiteMode.Strict;
-        o.LoginPath = "/gestion/acceso";
-        o.AccessDeniedPath = "/gestion/acceso";
+        // Las páginas de gestión comprueban el acceso a su empresa y redirigen a {empresa}/gestion/acceso.
+        o.LoginPath = "/admin/acceso";
+        o.AccessDeniedPath = "/admin/acceso";
         o.ReturnUrlParameter = "volver";
         o.ExpireTimeSpan = TimeSpan.FromHours(8);
         o.SlidingExpiration = true;
     });
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy(Politicas.Organizador, p => p.RequireRole(Politicas.Organizador));
+builder.Services.AddAuthorization();
 
 builder.Services.AddAntiforgery(o =>
 {
@@ -67,7 +70,7 @@ builder.Services.AddAntiforgery(o =>
     o.Cookie.SameSite = SameSiteMode.Strict;
 });
 
-// App Service termina TLS en su proxy y reenvía X-Forwarded-Proto/For.
+// Caddy termina TLS y reenvía X-Forwarded-Proto/For.
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
 {
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -85,7 +88,8 @@ builder.Services.AddRateLimiter(o =>
             return RateLimitPartition.GetNoLimiter("lectura");
 
         var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "desconocida";
-        var esAcceso = ctx.Request.Path.StartsWithSegments("/gestion/acceso");
+        // /gestion/acceso, /{empresa}/gestion/acceso y /admin/acceso.
+        var esAcceso = ctx.Request.Path.Value?.TrimEnd('/').EndsWith("/acceso", StringComparison.OrdinalIgnoreCase) == true;
         return RateLimitPartition.GetFixedWindowLimiter(
             (esAcceso ? "acceso:" : "post:") + ip,
             _ => new FixedWindowRateLimiterOptions
@@ -134,8 +138,3 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>();
 
 app.Run();
-
-public static class Politicas
-{
-    public const string Organizador = "Organizador";
-}

@@ -1,10 +1,15 @@
 @page "/inscripcion"
+@page "/{EmpresaSlug}/inscripcion"
+@inherits PaginaEmpresa
 @inject IntercambioService Servicio
 @inject EnviadorCorreo EnviadorCorreo
-@inject NavigationManager Navegacion
 
-<PageTitle>Inscripción · Red Cetino-Monteagudo-Rivera</PageTitle>
+<PageTitle>Inscripción · @NombreEmpresa</PageTitle>
 
+@if (Emp is null)
+{
+    return;
+}
 @if (codigoGenerado is not null)
 {
     <section class="tarjeta tarjeta-exito">
@@ -20,21 +25,25 @@
         {
             <div class="aviso aviso-advertencia" role="status">No pudimos enviarte el código por correo. Anótalo o tómale una captura de pantalla.</div>
         }
-        <p>📅 El sorteo del amigo secreto se hará <strong>@Evento.FechaSorteo</strong> Después de esa hora, entra con tu código para descubrir a quién le darás tu postre.</p>
+        @if (Emp.FechaSorteo.Length > 0)
+        {
+            <p>📅 El sorteo del amigo secreto se hará <strong>@Emp.FechaSorteo</strong></p>
+        }
+        <p>Después del sorteo, entra con tu código para descubrir a quién le darás tu postre.</p>
         <p class="ayuda">Lo guardamos también en este navegador para rellenarlo automáticamente.</p>
         <div class="acciones">
-            <a class="btn btn-secundario" href="consulta">Ver o editar mi inscripción</a>
-            <a class="btn btn-enlace" href="">Volver al inicio</a>
+            <a class="btn btn-secundario" href="@Ruta("consulta")">Ver o editar mi inscripción</a>
+            <a class="btn btn-enlace" href="@Ruta()">Volver al inicio</a>
         </div>
     </section>
 }
-else if (sorteoRealizado)
+else if (Emp.SorteoRealizado)
 {
     <section class="tarjeta">
         <h1>Inscripciones cerradas</h1>
         <p>El sorteo ya se realizó, así que no se aceptan nuevas inscripciones.</p>
         <div class="acciones">
-            <a class="btn btn-primario" href="consulta">🎁 Ver mi amigo secreto</a>
+            <a class="btn btn-primario" href="@Ruta("consulta")">🎁 Ver mi amigo secreto</a>
         </div>
     </section>
 }
@@ -61,7 +70,6 @@ else
     [SupplyParameterFromForm(FormName = "inscripcion")]
     private ParticipanteForm? Form { get; set; }
 
-    private bool sorteoRealizado;
     private string? codigoGenerado;
     private string? correoDestino;
     private bool correoEnviado;
@@ -70,12 +78,13 @@ else
     protected override async Task OnInitializedAsync()
     {
         Form ??= new ParticipanteForm();
-        sorteoRealizado = await Servicio.SorteoRealizadoAsync();
+        await CargarEmpresaAsync();
     }
 
     private async Task InscribirAsync()
     {
-        var resultado = await Servicio.InscribirAsync(Form!);
+        if (Emp is null) return;
+        var resultado = await Servicio.InscribirAsync(Emp.Id, Form!);
         if (!resultado.Ok)
         {
             error = resultado.Error;
@@ -84,7 +93,7 @@ else
 
         codigoGenerado = resultado.Codigo;
         correoDestino = Correo.Normalizar(Form!.Correo);
-        correoEnviado = await EnviadorCorreo.EnviarCodigoAsync(
-            correoDestino, Texto.Limpiar(Form.NombreCompleto), codigoGenerado!, Navegacion.ToAbsoluteUri("consulta").ToString());
+        correoEnviado = await EnviadorCorreo.EnviarCodigoAsync(Emp,
+            correoDestino, Texto.Limpiar(Form.NombreCompleto), codigoGenerado!, Navegacion.ToAbsoluteUri(Ruta("consulta")).ToString());
     }
 }

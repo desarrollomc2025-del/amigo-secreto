@@ -2,7 +2,10 @@
 (() => {
     'use strict';
 
-    const CLAVE = 'amigoSecreto.codigo';
+    // Un código guardado por empresa (el layout pone data-empresa en <main>).
+    const BASE = 'amigoSecreto.codigo';
+    const empresa = document.querySelector('[data-empresa]')?.dataset.empresa;
+    const CLAVE = empresa ? `${BASE}.${empresa}` : BASE;
     const almacen = {
         leer() { try { return localStorage.getItem(CLAVE); } catch { return null; } },
         guardar(v) { try { localStorage.setItem(CLAVE, v); } catch { /* modo privado */ } },

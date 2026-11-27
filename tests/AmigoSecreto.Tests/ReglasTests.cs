@@ -129,3 +129,77 @@ public class CorreoTests
     public void El_atributo_deja_el_vacio_a_Required() =>
         Assert.True(new CorreoValidoAttribute().IsValid(""));
 }
+
+public class SlugTests
+{
+    [Theory]
+    [InlineData("acme")]
+    [InlineData("red-cmr")]
+    [InlineData("a1")]
+    [InlineData("x")]
+    public void Acepta_slugs_validos(string slug) => Assert.True(Slug.EsValido(slug));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("-acme")]
+    [InlineData("acme-")]
+    [InlineData("ac--me")]
+    [InlineData("Acme")]
+    [InlineData("acmé")]
+    [InlineData("app.css")]
+    [InlineData("gestion")]
+    [InlineData("admin")]
+    [InlineData("consulta")]
+    [InlineData(null)]
+    public void Rechaza_slugs_invalidos_o_reservados(string? slug) => Assert.False(Slug.EsValido(slug));
+
+    [Theory]
+    [InlineData("Café Ñandú S.A.", "cafe-nandu-s-a")]
+    [InlineData("  Red Cetino-Monteagudo-Rivera ", "red-cetino-monteagudo-rivera")]
+    [InlineData("¡Hola!", "hola")]
+    public void Sugerir(string nombre, string esperado) => Assert.Equal(esperado, Slug.Sugerir(nombre));
+
+    [Fact]
+    public void Sugerir_respeta_la_longitud_maxima() =>
+        Assert.True(Slug.EsValido(Slug.Sugerir(new string('a', 30) + " " + new string('b', 30))));
+}
+
+public class HashClaveTests
+{
+    [Fact]
+    public void Verifica_la_clave_correcta_y_rechaza_otras()
+    {
+        var hash = HashClave.Crear("clave-de-prueba");
+        Assert.True(HashClave.Verificar("clave-de-prueba", hash));
+        Assert.False(HashClave.Verificar("clave-de-prueba ", hash));
+        Assert.False(HashClave.Verificar("", hash));
+        Assert.False(HashClave.Verificar(null, hash));
+    }
+
+    [Fact]
+    public void Usa_sal_distinta_cada_vez() => Assert.NotEqual(HashClave.Crear("igual-igual"), HashClave.Crear("igual-igual"));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("texto-plano")]
+    [InlineData("pbkdf2-sha256$x$abc$def")]
+    [InlineData("pbkdf2-sha256$1000$no-base64$no-base64")]
+    public void Rechaza_hashes_invalidos_sin_lanzar(string? almacenado) =>
+        Assert.False(HashClave.Verificar("cualquier-clave", almacenado));
+}
+
+public class AccesoEmpresaTests
+{
+    [Theory]
+    [InlineData("/acme/gestion", "acme/gestion/acceso?volver=gestion")]
+    [InlineData("/acme/gestion/parejas", "acme/gestion/acceso?volver=gestion%2Fparejas")]
+    [InlineData("/gestion/reporte", "gestion/acceso?volver=gestion%2Freporte")]
+    [InlineData("/gestion", "gestion/acceso?volver=gestion")]
+    [InlineData("/admin", null)]
+    [InlineData("https://otro.sitio/gestion", null)]
+    [InlineData("//otro.sitio/gestion", null)]
+    [InlineData(null, null)]
+    public void Redirige_al_acceso_de_la_empresa(string? volver, string? esperado) =>
+        Assert.Equal(esperado, AccesoEmpresa.Desde(volver));
+}

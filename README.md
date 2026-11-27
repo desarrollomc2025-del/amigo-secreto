@@ -3,7 +3,8 @@
 Aplicación web (amigo secreto) para organizar el intercambio de postres del convivio de la Red Cetino-Monteagudo-Rivera.
 
 - **Participantes** (sin cuenta): se inscriben (nombre, correo, postre, lugar de compra y asistencia; todo obligatorio), reciben un código personal de 6 caracteres en pantalla y por correo, pueden editar su inscripción hasta el sorteo y después abren un regalo animado que revela a su amigo secreto.
-- **Organizador** (`/gestion`, protegido con `ADMIN_KEY`): ve totales y la lista de inscritos, realiza/rehace/reinicia el sorteo, elimina inscripciones, recupera códigos perdidos y puede **limpiar todo** (borrar inscripciones y sorteo) para empezar de nuevo. **Nunca** ve las asignaciones.
+- **Organizador** (`/<empresa>/gestion`, con la clave de su empresa o `ADMIN_KEY`): ve totales y la lista de inscritos, realiza/rehace/reinicia el sorteo, elimina inscripciones, recupera códigos perdidos y puede **limpiar todo** (borrar inscripciones y sorteo) para empezar de nuevo. **Nunca** ve las asignaciones.
+- **Varias empresas** (`/admin`, solo con `ADMIN_KEY`): cada empresa tiene su dirección (`/<empresa>`), sus inscritos, su sorteo y su clave de organizador; ninguna ve los datos de otra. Las direcciones sin empresa (`/`, `/inscripcion`, `/consulta`, `/gestion`) usan la empresa marcada como principal.
 
 📖 **[Manual de usuario](docs/MANUAL-USUARIO.md)** ([PDF](docs/MANUAL-USUARIO.pdf)) para participantes y organizador.
 
@@ -22,9 +23,11 @@ Aplicación web (amigo secreto) para organizar el intercambio de postres del con
 ```
 src/AmigoSecreto/
   Program.cs                  Configuración: BD, cookie de gestión, límites de envíos, cabeceras
-  Data/                       Entidades, DbContext e inicializador (crea las tablas al iniciar)
+  Data/                       Entidades (Empresa, Participante, Asignacion), DbContext e inicializador
+                              (crea las tablas y migra bases anteriores al iniciar)
   Servicios/                  Lógica del intercambio, sorteo, códigos, correo, clave de administración
-  Components/Pages/           Inicio, Inscripción, Consulta (mi código), Gestión, errores
+  Components/PaginaEmpresa.cs Base de las páginas: resuelve la empresa de la URL y el acceso de gestión
+  Components/Pages/           Inicio, Inscripción, Consulta (mi código), Gestión, Admin (empresas), errores
   wwwroot/app.css, app.js     Estilo navideño y mejoras (copiar código, regalo, confeti)
 tests/AmigoSecreto.Tests/     Pruebas del sorteo, nombres, códigos y validación de correo
 deploy/aws/                   docker-compose, Caddyfile, .env.example y user-data de la EC2
@@ -33,12 +36,13 @@ Dockerfile                    Imagen de la app
 
 ## Reglas principales
 
+- **Empresas**: la dirección (slug) admite minúsculas, números y guiones; no puede ser una palabra de la app (`admin`, `gestion`, `consulta`, `inscripcion`, `estado`…). Las claves de organizador se guardan con PBKDF2-SHA256 y sal. La sesión de un organizador solo vale para su empresa; `ADMIN_KEY` vale para todas.
 - **Código personal**: 6 caracteres del alfabeto `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (sin 0/O ni 1/I), generado con `RandomNumberGenerator`. Se guarda en `localStorage` para rellenarlo automáticamente.
-- **Nombres duplicados**: se comparan sin distinguir mayúsculas, tildes ni espacios extra (`José  Peña` = `jose pena`). Hay un índice único en la base como respaldo.
+- **Nombres duplicados** (dentro de la misma empresa): se comparan sin distinguir mayúsculas, tildes ni espacios extra (`José  Peña` = `jose pena`). Hay un índice único en la base como respaldo.
 - **Sorteo**: solo participan quienes asistirán (mínimo 3). Se barajan con generador criptográfico y se forma **un solo ciclo** A→B→C→…→A: nadie se toca a sí mismo y funciona con números impares. Al sortear se cierran las inscripciones.
 - **Privacidad**: las asignaciones solo se envían al navegador de cada participante cuando ingresa **su propio** código. El panel de gestión solo muestra la cantidad.
 - **Seguridad**: antiforgery en todos los formularios; validación en cliente (HTML5) y servidor (DataAnnotations); clave comparada en tiempo constante (hash SHA-256 + `FixedTimeEquals`); cookie de gestión HttpOnly, Secure, SameSite=Strict y firmada/cifrada por Data Protection; límite de envíos por IP (10 intentos de acceso cada 5 min, 60 envíos por minuto); `Cache-Control: no-store` en páginas.
-- **Fechas**: se guardan en UTC y se muestran en hora de Guatemala (UTC-6). La fecha del sorteo que se anuncia está en `Evento.FechaSorteo` (`Servicios/Utilidades.cs`).
+- **Fechas**: se guardan en UTC y se muestran en hora de Guatemala (UTC-6). La fecha del sorteo que se anuncia la define cada empresa en `/admin`.
 - **Correo**: obligatorio y validado (formato `usuario@dominio.tld`); se guarda en minúsculas. Las bases creadas antes de este campo reciben la columna al iniciar la app.
 
 ## Ejecutar en local
@@ -55,7 +59,7 @@ dotnet user-secrets set "ADMIN_KEY" "una-clave-larga-y-secreta"
 dotnet run --launch-profile https
 ```
 
-Abre https://localhost:7248. Las tablas se crean solas al iniciar. Para el panel del organizador entra a https://localhost:7248/gestion.
+Abre https://localhost:7248. Las tablas se crean solas al iniciar. En una base nueva no hay empresas: entra a https://localhost:7248/admin con `ADMIN_KEY` y crea la primera (queda como principal).
 
 > Si el navegador no confía en el certificado de desarrollo: `dotnet dev-certs https --trust`.
 
@@ -132,7 +136,26 @@ docker compose logs -f app        # registros de la app
 docker compose restart caddy      # reintentar el certificado tras cambiar el DNS
 ```
 
-> Los datos viven en los volúmenes de Docker de la instancia. Para respaldarlos: `docker compose exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SQL_PASSWORD" -Q "BACKUP DATABASE AmigoSecreto TO DISK='/var/opt/mssql/respaldo.bak'"`.
+> Los datos viven en los volúmenes de Docker de la instancia. Ver «Respaldo y restauración».
+
+### Respaldo y restauración
+
+`deploy/aws/respaldar.sh` (Git Bash, con sesión de AWS CLI) genera en la instancia un `BACKUP DATABASE` (.bak) y un export JSON de todas las tablas, los empaca con el `.env` y las llaves de Data Protection y los descarga por AWS Systems Manager (sin SSH ni S3), verificando el SHA-256, a `C:\Aplicaciones\Respaldos\AmigoSecreto\<fecha>\produccion` (o a la carpeta indicada en `DESTINO`). Para restaurar en una instancia nueva, ver `RESTAURAR.md` dentro de la carpeta del respaldo.
+
+Restaurar el `.bak` en el contenedor `sql` (con la app detenida):
+
+```bash
+docker compose stop app
+docker compose cp AmigoSecreto.bak sql:/var/opt/mssql/AmigoSecreto.bak
+docker compose exec -u 0 sql chown mssql /var/opt/mssql/AmigoSecreto.bak
+docker compose exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P "$SQL_PASSWORD" \
+  -Q "RESTORE DATABASE AmigoSecreto FROM DISK='/var/opt/mssql/AmigoSecreto.bak' WITH REPLACE"
+docker compose start app
+```
+
+### Migración de bases anteriores
+
+La app usa `EnsureCreated` y aplica al iniciar pasos SQL idempotentes (`InicializadorBaseDatos.Migraciones`). Al pasar a varias empresas, los inscritos y el sorteo existentes quedan en la empresa `red-cmr` (principal) y se elimina la tabla `EstadoSorteo`.
 
 ## Integración continua
 
@@ -140,8 +163,8 @@ docker compose restart caddy      # reintentar el certificado tras cambiar el DN
 
 ## Uso el día del convivio
 
-1. Comparte la URL para que todos se inscriban (si hiciste pruebas antes, usa **Limpiar todo** en `/gestion` primero).
-2. Revisa en `/gestion` que todos los asistentes estén inscritos.
+1. Comparte la dirección de la empresa (`https://<dominio>/<empresa>`) para que todos se inscriban (si hiciste pruebas antes, usa **Limpiar todo** en su panel primero).
+2. Revisa en `/<empresa>/gestion` que todos los asistentes estén inscritos.
 3. Pulsa **Realizar sorteo**: se cierran las inscripciones.
 4. Cada quien entra con su código y abre su regalo 🎁.
 5. Si alguien perdió su código, recupéralo desde la lista de participantes y compártelo **solo con esa persona**.

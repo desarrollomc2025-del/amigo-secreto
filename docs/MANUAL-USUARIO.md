@@ -19,6 +19,7 @@ Este manual explica cómo usar la página del intercambio de postres (amigo secr
    - [Ver o editar mi inscripción](#23-ver-o-editar-mi-inscripción)
    - [Descubrir a mi amigo secreto](#24-descubrir-a-mi-amigo-secreto)
 3. [Para el organizador](#3-para-el-organizador)
+   - [Varias empresas](#36-varias-empresas)
 4. [Preguntas frecuentes](#4-preguntas-frecuentes)
 5. [Mensajes que puedes ver](#5-mensajes-que-puedes-ver)
 
@@ -157,6 +158,25 @@ Todas las acciones piden confirmación antes de ejecutarse.
 3. A la hora indicada, presiona **🎲 Realizar sorteo**.
 4. Avisa al grupo que ya pueden entrar con su código para descubrir a su amigo secreto.
 5. Evita usar **Rehacer** después de que la gente ya vio su resultado, salvo que sea necesario.
+
+### 3.6 Varias empresas
+
+La misma página puede atender a varias empresas u organizaciones a la vez. Cada una tiene **su propia dirección**, sus inscritos, su sorteo y su clave de organizador, y ninguna ve los datos de las demás.
+
+| Para | Dirección |
+|---|---|
+| Participantes de la empresa | `https://red-cetino-monteagudo-rivera.org/<empresa>` |
+| Organizador de la empresa | `https://red-cetino-monteagudo-rivera.org/<empresa>/gestion` (con la clave de esa empresa) |
+| Administrador general | `https://red-cetino-monteagudo-rivera.org/admin` (con la clave general) |
+
+En **/admin** el administrador general:
+
+- **Crea una empresa**: nombre, dirección (p. ej. `acme`; si se deja vacía se arma con el nombre), subtítulo, fecha del sorteo y la clave de su organizador. La dirección no se puede cambiar después.
+- **Edita** el nombre, el subtítulo, la fecha o la clave del organizador.
+- Marca con **⭐ Principal** la empresa que se muestra en la página de inicio y en las direcciones sin empresa (`/inscripcion`, `/consulta`, `/gestion`).
+- **Elimina** una empresa que ya no tenga inscritos (primero se vacía con «Limpiar todo» en su panel).
+
+La clave general también sirve para entrar al panel de cualquier empresa. El código personal de un participante solo funciona en la dirección de su empresa.
 
 ---
 

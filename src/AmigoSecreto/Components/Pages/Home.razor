@@ -1,46 +1,70 @@
 ﻿@page "/"
-@inject IntercambioService Servicio
+@page "/{EmpresaSlug}"
+@inherits PaginaEmpresa
 
-<PageTitle>Red Cetino-Monteagudo-Rivera · Intercambio de postres</PageTitle>
-
-<section class="tarjeta portada">
-    <div class="portada-adorno" aria-hidden="true">🎄🍰🎁</div>
-    <h1>¡Intercambio de postres!</h1>
-    <p class="lead">
-        Inscríbete, elige el postre que te gustaría recibir y, cuando se haga el sorteo,
-        descubre a quién le darás tu postre.
-    </p>
-
-    @if (sorteoRealizado)
+@if (Emp is null)
+{
+    @* Sin empresa predeterminada: «/» solo orienta. Cada empresa tiene su propia dirección. *@
+    <PageTitle>Amigo secreto</PageTitle>
+    @if (EmpresaSlug is null)
     {
-        <div class="aviso aviso-exito">✨ ¡El sorteo ya se realizó! Ingresa tu código para descubrir a tu amigo secreto.</div>
-        <div class="acciones">
-            <a class="btn btn-primario btn-grande" href="consulta">🎁 Ver mi amigo secreto</a>
-        </div>
+        <section class="tarjeta portada">
+            <div class="portada-adorno" aria-hidden="true">🎄🎁</div>
+            <h1>¡Amigo secreto!</h1>
+            <p class="lead">Cada empresa tiene su propia dirección para inscribirse. Pídele el enlace a quien organiza tu intercambio.</p>
+        </section>
     }
-    else
-    {
-        <div class="aviso aviso-exito">📅 El sorteo del amigo secreto se hará <strong>@Evento.FechaSorteo</strong></div>
-        <div class="acciones">
-            <a class="btn btn-primario btn-grande" href="inscripcion">✍️ Inscribirme</a>
-            <a class="btn btn-secundario btn-grande" href="consulta">🔑 Ya tengo mi código</a>
-        </div>
-    }
-</section>
+}
+else
+{
+    <PageTitle>@Emp.Nombre · @Emp.Subtitulo</PageTitle>
 
-<section class="tarjeta pasos">
-    <h2>¿Cómo funciona?</h2>
-    <ol>
-        <li><strong>Inscríbete</strong> con tu nombre, el postre que quieres y dónde se compra.</li>
-        <li><strong>Guarda tu código</strong> de 6 caracteres. Con él puedes editar tu inscripción.</li>
-        <li><strong>Espera el sorteo</strong> @Evento.FechaSorteo Al cerrarse las inscripciones, el organizador lo realiza.</li>
-        <li><strong>Abre tu regalo</strong> con tu código y descubre a quién le regalarás. 🤫</li>
-    </ol>
-</section>
+    <section class="tarjeta portada">
+        <div class="portada-adorno" aria-hidden="true">🎄🍰🎁</div>
+        <h1>¡@Emp.Subtitulo!</h1>
+        <p class="lead">
+            Inscríbete, elige el postre que te gustaría recibir y, cuando se haga el sorteo,
+            descubre a quién le darás tu postre.
+        </p>
+
+        @if (Emp.SorteoRealizado)
+        {
+            <div class="aviso aviso-exito">✨ ¡El sorteo ya se realizó! Ingresa tu código para descubrir a tu amigo secreto.</div>
+            <div class="acciones">
+                <a class="btn btn-primario btn-grande" href="@Ruta("consulta")">🎁 Ver mi amigo secreto</a>
+            </div>
+        }
+        else
+        {
+            @if (Emp.FechaSorteo.Length > 0)
+            {
+                <div class="aviso aviso-exito">📅 El sorteo del amigo secreto se hará <strong>@Emp.FechaSorteo</strong></div>
+            }
+            <div class="acciones">
+                <a class="btn btn-primario btn-grande" href="@Ruta("inscripcion")">✍️ Inscribirme</a>
+                <a class="btn btn-secundario btn-grande" href="@Ruta("consulta")">🔑 Ya tengo mi código</a>
+            </div>
+        }
+    </section>
+
+    <section class="tarjeta pasos">
+        <h2>¿Cómo funciona?</h2>
+        <ol>
+            <li><strong>Inscríbete</strong> con tu nombre, el postre que quieres y dónde se compra.</li>
+            <li><strong>Guarda tu código</strong> de 6 caracteres. Con él puedes editar tu inscripción.</li>
+            <li><strong>Espera el sorteo</strong>@(Emp.FechaSorteo.Length > 0 ? " " + Emp.FechaSorteo.TrimEnd('.') : ""). Al cerrarse las inscripciones, el organizador lo realiza.</li>
+            <li><strong>Abre tu regalo</strong> con tu código y descubre a quién le regalarás. 🤫</li>
+        </ol>
+    </section>
+}
 
 @code {
-    private bool sorteoRealizado;
-
-    protected override async Task OnInitializedAsync() =>
-        sorteoRealizado = await Servicio.SorteoRealizadoAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // En «/» sin empresa predeterminada se muestra la portada neutral en vez de 404.
+        if (EmpresaSlug is null)
+            await CargarEmpresaOpcionalAsync();
+        else
+            await CargarEmpresaAsync();
+    }
 }
